@@ -1,0 +1,54 @@
+site_name: 3d-tennis-lab
+repo_url: https://github.com/motoki/3d-tennis-lab
+site_url: https://motoki.github.io/3d-tennis-lab
+site_description: This is a template repository for Python projects that use Poetry for their dependency management.
+site_author: motoki
+edit_uri: edit/main/docs/
+repo_name: motoki/3d-tennis-lab
+copyright: Maintained by <a href="https://motoki.com">Florian</a>.
+
+nav:
+  - Home: index.md
+  - Modules: modules.md
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          setup_commands:
+            - import sys
+            - sys.path.append('../')
+theme:
+  name: material
+  feature:
+    tabs: true
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: white
+      accent: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/motoki/3d-tennis-lab
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/3d-tennis-lab
+
+markdown_extensions:
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
