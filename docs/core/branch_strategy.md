@@ -111,6 +111,7 @@ git push origin --delete feature/player-analysis/humans4d-integration
 | 接頭辞 | 目的 | 具体例 |
 | :--- | :--- | :--- |
 | **`feature/`** | 👨‍🔬 新しい機能の開発やモデルの実験 | `feature/ball-tracking/new-model` |
+| **`analysis/`** | 📈 データ分析、調査、可視化 | `analysis/court-dataset/initial-eda` |
 | **`docs/`** | 📚 ドキュメントの追加・修正 | `docs/add-branching-strategy` |
 | **`fix/`** | 🐛 バグの修正 | `fix/player-detection-crash` |
 | **`chore/`** | 🧹 リファクタリングやライブラリ更新など、機能や修正以外の雑務 | `chore/update-pytorch-version` |
