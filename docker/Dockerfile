@@ -29,5 +29,6 @@ COPY poetry.lock pyproject.toml /app/
 # Install the dependencies using Poetry
 RUN poetry config virtualenvs.create false && \
     poetry install --no-interaction --no-ansi
-    
-CMD ["tail", "-f", "/dev/null"]
+
+EXPOSE 8888
+CMD ["poetry", "run", "jupyter", "lab", "--ip=0.0.0.0", "--allow-root"]
