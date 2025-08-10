@@ -75,7 +75,7 @@ poetry install
 
       * まず最初に、このプロジェクトが何を目指しているのか、全体像を把握してください。
 
-  * **[ブランチ戦略](./docs/core/branch_strategy.md)**
+  * **[ブランチ戦略](./docs/core/branching_strategy.md)**
 
       * Gitのブランチをどのように作成・運用するかのルールです。`feature`, `fix`, `docs`などの命名規則に従ってください。
 
