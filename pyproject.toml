@@ -30,7 +30,7 @@ requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.mypy]
-files = ["3d_tennis"]
+files = ["3d_tennis_system", "development"]
 disallow_untyped_defs = "True"
 disallow_any_unimported = "True"
 no_implicit_optional = "True"
@@ -45,7 +45,7 @@ show_error_codes = "True"
 testpaths = ["tests"]
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py311"
 line-length = 120
 fix = true
 
@@ -100,4 +100,4 @@ skip_empty = true
 
 [tool.coverage.run]
 branch = true
-source = ["3d_tennis"]
+source = ["3d_tennis_system"]
