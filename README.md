@@ -71,19 +71,19 @@ poetry install
 
 本プロジェクトに貢献する際は、開発効率とコードの品質を維持するため、以下のドキュメントに必ず目を通してください。これらはプロジェクトの「憲法」です。
 
-  * **[プロジェクト計画書](https://www.google.com/search?q=./docs/core/project_plan.md)**
+  * **[プロジェクト計画書](./docs/core/project_plan.md)**
 
       * まず最初に、このプロジェクトが何を目指しているのか、全体像を把握してください。
 
-  * **[ブランチ戦略](https://www.google.com/search?q=./docs/core/branch_strategy.md)**
+  * **[ブランチ戦略](./docs/core/branch_strategy.md)**
 
       * Gitのブランチをどのように作成・運用するかのルールです。`feature`, `fix`, `docs`などの命名規則に従ってください。
 
-  * **[コミットメッセージ規約](https://www.google.com/search?q=./docs/core/commit_message_rule.md)**
+  * **[コミットメッセージ規約](./docs/core/commit_message_rule.md)**
 
       * 変更履歴を分かりやすく保つための、コミットメッセージの書き方のルールです。
 
-  * **[実験的開発の進め方](https://www.google.com/search?q=./development/README.md)**
+  * **[実験的開発の進め方](./development/README.md)**
 
       * `development/`ディレクトリで、どのようにモデルの試行錯誤を進めるかの具体的なワークフローです。
 
