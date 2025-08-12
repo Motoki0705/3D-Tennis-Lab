@@ -5,11 +5,15 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install system packages required for machine learning and development
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     git \
     curl \
     gnupg \
+    ffmpeg \
     libgl1 \
+    libglib2.0-0 \
+    libgtk2.0-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # # Install node.js LTS version
