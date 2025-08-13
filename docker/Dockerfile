@@ -16,10 +16,10 @@ RUN apt-get update && \
     libgtk2.0-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# # Install node.js LTS version
-# # Fetch the NodeSource GPG key and add the repository, then install nodejs
-# RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
-#     && apt-get install -y nodejs
+# Install node.js LTS version
+# Fetch the NodeSource GPG key and add the repository, then install nodejs
+RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
+    && apt-get install -y nodejs
 
 # # Install gemini-cli globally
 # RUN npm install -g https://github.com/google-gemini/gemini-cli
