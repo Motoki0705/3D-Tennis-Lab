@@ -2,11 +2,11 @@
 model:
   vit_name: "vit_base_patch16_224.augreg_in21k" # 事前学習済みモデルをより具体的に指定
   pretrained: true
-  decoder_channels: [512, 256, 128, 64] # 段階的なアップサンプリング
+  decoder_channels: [256, 128, 64] # 段階的なアップサンプリング
   heatmap_channels: 15
-  output_size: [224, 224] # ViT(224)の出力に合わせる (224 / 16 * 4)
+  output_size: [224, 224] # ViT(224)の出力に合わせる (224 / 16 * (2 ** 4) = 224)
 
-data:
+dataset:
   img_dir: "data/processed/court/images/"
   annotation_file: "data/processed/court/annotation.json"
   img_size: [224, 224]
@@ -14,6 +14,10 @@ data:
   heatmap_sigma: 2.0
   batch_size: 32
   num_workers: 8
+  train_ratio: 0.8
+  val_ratio: 0.1
+  pin_memory: true
+  persistent_workers: true
 
 training:
   max_epochs: 100
@@ -32,6 +36,8 @@ callbacks:
     monitor: "val/PCK@0.05"
     mode: max
     patience: 10
+  heatmap_logger:
+    num_samples: 3
 
 # PCK評価用の設定
 evaluation:
