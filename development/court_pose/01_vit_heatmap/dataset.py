@@ -73,6 +73,7 @@ class CourtKeypointDataset(Dataset):
             # キーポイントも手動でスケール
             scale_x = self.img_size[1] / original_w
             scale_y = self.img_size[0] / original_h
+            visible_keypoints = visible_keypoints.astype(np.float32)  # または np.float32
             visible_keypoints[:, 0] *= scale_x
             visible_keypoints[:, 1] *= scale_y
             transformed_keypoints = visible_keypoints
