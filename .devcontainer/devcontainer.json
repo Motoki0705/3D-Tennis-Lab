@@ -5,6 +5,7 @@
     // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
     "dockerComposeFile": "../docker/docker-compose.yml",
     "service": "cuda_dev",
+    "runServices": ["cuda_dev"],
     "workspaceFolder": "/app",
 
     // Use 'postCreateCommand' to run commands after the container is created.

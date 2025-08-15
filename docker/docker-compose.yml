@@ -19,6 +19,8 @@ services:
       target: app-cuda
     ports:
       - "8888:8888"
+      - "8000:8000" # FastAPI 用
+      - "6006:6006" # TensorBoard 用
     volumes:
       - ..:/app
       - ../data:/app/data
@@ -31,3 +33,4 @@ services:
               count: all
               capabilities: ["gpu"]
     tty: true
+    shm_size: "8gb"
