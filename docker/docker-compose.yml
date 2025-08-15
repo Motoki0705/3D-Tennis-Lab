@@ -1,13 +1,33 @@
- 
-version: '3.8'
+# version は省略推奨（古いスキーマ固定を避けるため）
 services:
-  dev:
+  dev: # CPU 環境
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      target: app-cpu
     ports:
       - "8888:8888"
     volumes:
       - ..:/app
       - ../data:/app/data
+    tty: true
+
+  cuda_dev: # GPU（CUDA）環境
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: app-cuda
+    ports:
+      - "8888:8888"
+    volumes:
+      - ..:/app
+      - ../data:/app/data
+    # Swarm 由来だが Compose v2 でローカルでも動作
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu"]
     tty: true
