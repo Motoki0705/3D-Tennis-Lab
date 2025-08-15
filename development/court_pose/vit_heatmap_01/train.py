@@ -1,8 +1,9 @@
 # filename: development/court_pose/01_vit_heatmap/train.py (Hydra version)
 import hydra
 import pytorch_lightning as pl
+import torch
 from omegaconf import DictConfig  # HydraとOmegaConfをインポート
-from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
+from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint, RichProgressBar
 from pytorch_lightning.loggers import TensorBoardLogger
 
 from ...utils.callbacks.heatmap_logger import HeatmapImageLogger
@@ -14,6 +15,7 @@ from .lit_module import CourtLitModule
 # @hydra.mainデコレータを使用
 @hydra.main(config_path="configs", config_name="vit_heatmap_v1", version_base=None)
 def train(config: DictConfig):  # 引数でconfigを受け取る
+    torch.set_float32_matmul_precision("high")
     # Hydraは自動的にDotMapのようなアクセスを提供してくれるので、DotMap変換は不要
 
     # 1. LoggerとCallbackの設定
@@ -33,6 +35,7 @@ def train(config: DictConfig):  # 引数でconfigを受け取る
         verbose=True,
     )
     lr_monitor = LearningRateMonitor(logging_interval="epoch")
+    progress_bar = RichProgressBar()
     heatmap_logger = HeatmapImageLogger(num_samples=config.callbacks.heatmap_logger.num_samples)
 
     # 2. DataModuleとLightningModuleの初期化
@@ -49,7 +52,7 @@ def train(config: DictConfig):  # 引数でconfigを受け取る
         devices=config.training.devices,
         precision=config.training.precision,
         logger=logger,
-        callbacks=[checkpoint_callback, early_stop_callback, lr_monitor, heatmap_logger],
+        callbacks=[checkpoint_callback, early_stop_callback, lr_monitor, progress_bar, heatmap_logger],
     )
 
     trainer.fit(model, datamodule=datamodule)
