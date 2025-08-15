@@ -62,7 +62,6 @@ class BaseLitModule(LightningModule):
             mode="max",
             factor=0.1,
             patience=5,
-            verbose=True,
         )
         monitor_metric = None
         if self.metric_fns:
