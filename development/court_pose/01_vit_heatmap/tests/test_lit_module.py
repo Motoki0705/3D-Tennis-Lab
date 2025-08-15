@@ -1,29 +1,32 @@
 # filename: development/court_pose/01_vit_heatmap/tests/test_lit_module.py
 import torch
+
 from ..lit_module import CourtLitModule
+
 
 def test_lit_module_forward(dummy_config):
     """モデルのフォワードパスが正しい形状の出力を返すかテスト"""
     model = CourtLitModule(dummy_config)
-    
-    batch_size = dummy_config.data.batch_size
-    img_size = dummy_config.data.img_size
-    
+
+    batch_size = dummy_config.dataset.batch_size
+    img_size = dummy_config.dataset.img_size
+
     # ダミー入力テンソル
     dummy_input = torch.randn(batch_size, 3, img_size[0], img_size[1])
-    
+
     # フォワードパスを実行
     output = model(dummy_input)
-    
+
     heatmap_channels = dummy_config.model.heatmap_channels
     heatmap_size = dummy_config.model.output_size
-    
+
     assert output.shape == (batch_size, heatmap_channels, heatmap_size[0], heatmap_size[1])
+
 
 def test_lit_module_steps(dummy_config):
     """training_stepとvalidation_stepがスカラーlossを返すかテスト"""
     model = CourtLitModule(dummy_config)
-    
+
     b = dummy_config.data.batch_size
     c = 3
     h, w = dummy_config.data.img_size
@@ -34,24 +37,26 @@ def test_lit_module_steps(dummy_config):
     images = torch.randn(b, c, h, w)
     target_heatmaps = torch.rand(b, k, hh, wh)
     batch = (images, target_heatmaps)
-    
+
     # training_step
     train_loss = model.training_step(batch, 0)
-    assert train_loss.shape == torch.Size([]) # スカラーであること
+    assert train_loss.shape == torch.Size([])  # スカラーであること
     assert train_loss.requires_grad is True
 
     # validation_step
     val_loss = model.validation_step(batch, 0)
     assert val_loss.shape == torch.Size([])
 
+
 def test_configure_optimizers(dummy_config):
     """configure_optimizersがoptimizerとschedulerを返すかテスト"""
     model = CourtLitModule(dummy_config)
     optimizers = model.configure_optimizers()
-    
+
     assert "optimizer" in optimizers
     assert "lr_scheduler" in optimizers
     assert isinstance(optimizers["optimizer"], torch.optim.Optimizer)
+
 
 def test_pck_calculation(dummy_config):
     """PCK計算ロジックをテスト"""
@@ -61,8 +66,8 @@ def test_pck_calculation(dummy_config):
     # ケース1: 予測とターゲットが完全に一致
     pred = torch.zeros(1, k, h, w)
     target = torch.zeros(1, k, h, w)
-    pred[0, 0, 10, 20] = 1.0 # 予測
-    target[0, 0, 10, 20] = 1.0 # 正解
+    pred[0, 0, 10, 20] = 1.0  # 予測
+    target[0, 0, 10, 20] = 1.0  # 正解
     pck_perfect = model.calculate_pck(pred, target)
     assert torch.isclose(pck_perfect, torch.tensor(1.0))
 
@@ -75,6 +80,6 @@ def test_pck_calculation(dummy_config):
 
     # ケース3: ターゲットがない(v=0)場合は評価対象外
     pred = torch.rand(1, k, h, w)
-    target = torch.zeros(1, k, h, w) # 全てラベルなし
+    target = torch.zeros(1, k, h, w)  # 全てラベルなし
     pck_no_target = model.calculate_pck(pred, target)
     assert pck_no_target == 0.0 or torch.isnan(pck_no_target)

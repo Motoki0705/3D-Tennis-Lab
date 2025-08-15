@@ -1,9 +1,7 @@
 # filename: development/court_pose/01_vit_heatmap/tests/conftest.py
 import json
-import shutil
 from pathlib import Path
 
-import numpy as np
 import pytest
 from dotmap import DotMap
 from PIL import Image
@@ -20,18 +18,22 @@ def dummy_config():
     """テスト用のダミー設定を返す"""
     config = {
         "model": {
-            "vit_name": "vit_tiny_patch16_224", # テストなので小さいモデルを使用
+            "vit_name": "vit_tiny_patch16_224",  # テストなので小さいモデルを使用
             "pretrained": False,
             "decoder_channels": [128, 64],
             "heatmap_channels": 15,
             "output_size": [56, 56],
         },
-        "data": {
+        "dataset": {
             "img_size": [224, 224],
             "heatmap_size": [56, 56],
-            "heatmap_sigma": 1.0,
-            "batch_size": 2,
-            "num_workers": 0,
+            "heatmap_sigma": 2.0,
+            "batch_size": 32,
+            "num_workers": 8,
+            "train_ratio": 0.8,
+            "val_ratio": 0.1,
+            "pin_memory": True,
+            "persistent_workers": True,
         },
         "training": {
             "lr": 1e-4,
@@ -39,7 +41,7 @@ def dummy_config():
         },
         "evaluation": {
             "pck_threshold": 0.05,
-        }
+        },
     }
     return DotMap(config)
 
@@ -57,7 +59,7 @@ def dummy_dataset_path(tmp_path):
     annotation_path = data_dir / "annotation.json"
 
     # ダミー画像の作成 (2枚)
-    dummy_image = Image.new('RGB', (640, 480), color = 'red')
+    dummy_image = Image.new("RGB", (640, 480), color="red")
     dummy_image.save(img_dir / "img1.png")
     dummy_image.save(img_dir / "img2.png")
 
@@ -73,26 +75,20 @@ def dummy_dataset_path(tmp_path):
                 "image_id": 1,
                 "category_id": 1,
                 # kp0: visible, kp1: occluded, kp2: not labeled
-                "keypoints": [100, 150, 2, 200, 250, 1, 0, 0, 0] + [0,0,0]*12,
+                "keypoints": [100, 150, 2, 200, 250, 1, 0, 0, 0] + [0, 0, 0] * 12,
                 "num_keypoints": 2,
             },
             {
                 "id": 2,
                 "image_id": 2,
                 "category_id": 1,
-                "keypoints": [0,0,0]*15,
+                "keypoints": [0, 0, 0] * 15,
                 "num_keypoints": 0,
-            }
+            },
         ],
-        "categories": [
-            {
-                "id": 1, "name": "court", 
-                "keypoints": [f"kp_{i}" for i in range(15)],
-                "skeleton": []
-            }
-        ]
+        "categories": [{"id": 1, "name": "court", "keypoints": [f"kp_{i}" for i in range(15)], "skeleton": []}],
     }
-    with open(annotation_path, 'w') as f:
+    with open(annotation_path, "w") as f:
         json.dump(annotations, f)
-        
+
     return img_dir, annotation_path

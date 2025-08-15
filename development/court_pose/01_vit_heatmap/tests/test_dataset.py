@@ -1,7 +1,8 @@
 # filename: development/court_pose/01_vit_heatmap/tests/test_dataset.py
 import torch
-import numpy as np
+
 from ..dataset import CourtKeypointDataset
+
 
 def test_dataset_initialization(dummy_dataset_path, dummy_config):
     """データセットが正しく初期化されるかテスト"""
@@ -9,26 +10,27 @@ def test_dataset_initialization(dummy_dataset_path, dummy_config):
     dataset = CourtKeypointDataset(
         img_dir=img_dir,
         annotation_file=ann_file,
-        img_size=dummy_config.data.img_size,
-        heatmap_size=dummy_config.data.heatmap_size,
-        sigma=dummy_config.data.heatmap_sigma
+        img_size=dummy_config.dataset.img_size,
+        heatmap_size=dummy_config.dataset.heatmap_size,
+        sigma=dummy_config.dataset.heatmap_sigma,
     )
     assert len(dataset) == 2, "アノテーションの数が正しく読み込めていない"
+
 
 def test_dataset_getitem(dummy_dataset_path, dummy_config):
     """__getitem__が正しい形状と型のテンソルを返すかテスト"""
     img_dir, ann_file = dummy_dataset_path
-    cfg = dummy_config.data
+    cfg = dummy_config.dataset
     dataset = CourtKeypointDataset(
         img_dir=img_dir,
         annotation_file=ann_file,
         img_size=cfg.img_size,
         heatmap_size=cfg.heatmap_size,
         sigma=cfg.heatmap_sigma,
-        transform=None # テストでは拡張なし
+        transform=None,  # テストでは拡張なし
     )
-    
-    image, heatmap = dataset[0] # 最初のデータを取得
+
+    image, heatmap = dataset[0]  # 最初のデータを取得
 
     # 型の確認
     assert isinstance(image, torch.Tensor)
@@ -42,10 +44,11 @@ def test_dataset_getitem(dummy_dataset_path, dummy_config):
     assert image.min() >= 0.0 and image.max() <= 1.0
     assert heatmap.min() >= 0.0 and heatmap.max() <= 1.0
 
+
 def test_heatmap_generation(dummy_dataset_path, dummy_config):
     """ヒートマップがキーポイント位置にピークを持つかテスト"""
     img_dir, ann_file = dummy_dataset_path
-    cfg = dummy_config.data
+    cfg = dummy_config.dataset
     dataset = CourtKeypointDataset(
         img_dir=img_dir,
         annotation_file=ann_file,
@@ -53,7 +56,7 @@ def test_heatmap_generation(dummy_dataset_path, dummy_config):
         heatmap_size=cfg.heatmap_size,
         sigma=cfg.heatmap_sigma,
     )
-    
+
     _, heatmap = dataset[0]
 
     # keypoint 0 (visible) のヒートマップを確認
@@ -63,7 +66,7 @@ def test_heatmap_generation(dummy_dataset_path, dummy_config):
     peak_idx = torch.argmax(heatmap_kp0)
     peak_y = peak_idx // cfg.heatmap_size[1]
     peak_x = peak_idx % cfg.heatmap_size[1]
-    
+
     # 元の座標 (100, 150) がリサイズ後のヒートマップ座標に正しくマッピングされているか
     expected_x = int(100 * (cfg.heatmap_size[1] / 640))
     expected_y = int(150 * (cfg.heatmap_size[0] / 480))
