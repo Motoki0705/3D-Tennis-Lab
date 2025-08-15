@@ -1,7 +1,7 @@
 # filename: development/court_pose/01_vit_heatmap/tests/test_datamodule.py
 import torch
 
-from ..datamodule import CourtDataModule
+from development.court_pose.vit_heatmap_01.datamodule import CourtDataModule
 
 
 def test_datamodule_setup(dummy_dataset_path, dummy_config, monkeypatch):

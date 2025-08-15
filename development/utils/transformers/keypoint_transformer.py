@@ -2,7 +2,7 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
 
-def prepare_transforms(img_size, heatmap_size, sigma):
+def prepare_transforms(img_size):
     train_transforms = A.Compose(
         [
             A.Resize(img_size[0], img_size[1]),

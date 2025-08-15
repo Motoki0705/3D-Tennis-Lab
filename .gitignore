@@ -169,3 +169,6 @@ cython_debug/
 
 # data files
 data/
+
+# hydra config files
+outputs/

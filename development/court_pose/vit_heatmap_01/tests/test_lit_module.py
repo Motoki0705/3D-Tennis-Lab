@@ -1,7 +1,7 @@
 # filename: development/court_pose/01_vit_heatmap/tests/test_lit_module.py
 import torch
 
-from ..lit_module import CourtLitModule
+from development.court_pose.vit_heatmap_01.lit_module import CourtLitModule
 
 
 def test_lit_module_forward(dummy_config):

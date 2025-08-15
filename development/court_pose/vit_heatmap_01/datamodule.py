@@ -12,7 +12,7 @@ class CourtDataModule(BaseDataModule):
             annotation_file=Path(config.dataset.annotation_file),
             img_size=config.dataset.img_size,
             heatmap_size=config.dataset.heatmap_size,
-            sigma=config.dataset.sigma,
+            sigma=config.dataset.heatmap_sigma,
             transform=None,  # transformはBaseDataModuleで分割後に設定
         )
 

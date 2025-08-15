@@ -36,11 +36,7 @@ def train(config: DictConfig):  # 引数でconfigを受け取る
     heatmap_logger = HeatmapImageLogger(num_samples=config.callbacks.heatmap_logger.num_samples)
 
     # 2. DataModuleとLightningModuleの初期化
-    train_transform, val_transform = prepare_transforms(
-        img_size=config.dataset.img_size,
-        heatmap_size=config.model.output_size,
-        heatmap_channels=config.model.heatmap_channels,
-    )
+    train_transform, val_transform = prepare_transforms(img_size=config.dataset.img_size)
     datamodule = CourtDataModule(
         config=config, train_transforms=train_transform, val_transforms=val_transform, test_transforms=val_transform
     )
