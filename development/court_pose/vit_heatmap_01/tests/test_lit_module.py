@@ -23,29 +23,39 @@ def test_lit_module_forward(dummy_config):
     assert output.shape == (batch_size, heatmap_channels, heatmap_size[0], heatmap_size[1])
 
 
-def test_lit_module_steps(dummy_config):
-    """training_stepとvalidation_stepがスカラーlossを返すかテスト"""
+def test_lit_module_loss(dummy_config):
+    """training_step がスカラー、validation_step が所定の辞書を返すことを検査"""
     model = CourtLitModule(dummy_config)
 
-    b = dummy_config.data.batch_size
+    b = dummy_config.dataset.batch_size
     c = 3
-    h, w = dummy_config.data.img_size
+    h, w = dummy_config.dataset.img_size
     k = dummy_config.model.heatmap_channels
-    hh, wh = dummy_config.model.output_size
+    hh, ww = dummy_config.model.output_size
 
-    # ダミーバッチ
     images = torch.randn(b, c, h, w)
-    target_heatmaps = torch.rand(b, k, hh, wh)
+    target_heatmaps = torch.rand(b, k, hh, ww)
     batch = (images, target_heatmaps)
 
     # training_step
     train_loss = model.training_step(batch, 0)
-    assert train_loss.shape == torch.Size([])  # スカラーであること
+    assert isinstance(train_loss, torch.Tensor)
+    assert train_loss.shape == torch.Size([])  # スカラー
     assert train_loss.requires_grad is True
 
     # validation_step
-    val_loss = model.validation_step(batch, 0)
-    assert val_loss.shape == torch.Size([])
+    out = model.validation_step(batch, 0)
+    # 返却構造
+    assert set(out.keys()) == {"loss", "images", "pred_heatmaps", "target_heatmaps"}
+    # 型・形状
+    assert isinstance(out["loss"], torch.Tensor) and out["loss"].shape == torch.Size([])
+    assert out["images"].shape == (b, c, h, w)
+    assert out["pred_heatmaps"].shape == (b, k, hh, ww)
+    assert out["target_heatmaps"].shape == (b, k, hh, ww)
+    # CPUへ移っていること(Callbackの期待に一致)
+    assert out["images"].device.type == "cpu"
+    assert out["pred_heatmaps"].device.type == "cpu"
+    assert out["target_heatmaps"].device.type == "cpu"
 
 
 def test_configure_optimizers(dummy_config):

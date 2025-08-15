@@ -48,7 +48,7 @@ class HeatmapImageLogger(Callback):
 
         # ヒートマップのキーポイント数を取得 (例: 15)
         num_keypoints = self.pred_heatmaps.shape[1]
-        # 2. 予測ヒートマップをキーポイントごとにループして保存
+        # 2. 各キーポイントのヒートマップをグリッドにして追加
         for k in range(num_keypoints):
             # k番目のキーポイントのヒートマップだけを抽出
             # `[:, k:k+1, :, :]` とスライスして次元を(N, 1, H, W)に保つのがポイント
@@ -58,3 +58,8 @@ class HeatmapImageLogger(Callback):
             # TensorBoardのタグにキーポイント番号を追加
             tag = f"Validation_Pred/Heatmap_KP{k:02d}"
             writer.add_image(tag, pred_grid_k, global_step=pl_module.current_epoch)
+            # ターゲットヒートマップも同様に保存
+            target_heatmap_k = self.target_heatmaps[:, k : k + 1, :, :]
+            target_grid_k = make_grid(target_heatmap_k, normalize=True)
+            tag_target = f"Validation_Target/Heatmap_KP{k:02d}"
+            writer.add_image(tag_target, target_grid_k, global_step=pl_module.current_epoch)

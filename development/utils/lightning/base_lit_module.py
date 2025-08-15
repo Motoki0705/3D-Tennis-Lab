@@ -76,14 +76,10 @@ class BaseLitModule(LightningModule):
             factor=0.1,
             patience=5,
         )
-        monitor_metric = None
-        if self.metric_fns:
-            # 最初のmetric名を監視対象にする
-            monitor_metric = f"val/{next(iter(self.metric_fns.keys()))}"
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": scheduler,
-                "monitor": monitor_metric,
+                "monitor": "val/loss",
             },
         }

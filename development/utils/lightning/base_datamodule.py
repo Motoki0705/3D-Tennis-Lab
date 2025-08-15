@@ -60,7 +60,7 @@ class BaseDataModule(pl.LightningDataModule):
     def test_dataloader(self):
         return DataLoader(
             self.test_dataset,
-            batch_size=self.config.dsataset.batch_size,
+            batch_size=self.config.dataset.batch_size,
             num_workers=self.config.dataset.num_workers,
             pin_memory=self.config.dataset.pin_memory,
             persistent_workers=self.config.dataset.persistent_workers,

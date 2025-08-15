@@ -3,39 +3,45 @@ model:
   vit_name: "vit_base_patch16_224.augreg_in21k" # 事前学習済みモデルをより具体的に指定
   pretrained: true
   decoder_channels: [512, 256, 128, 64] # 段階的なアップサンプリング
+  decoder_name: "simple" # デコーダーの種類を指定("simple", "pixel_shuffle_attention", "context_pyramid" など)
   heatmap_channels: 15
   output_size: [224, 224] # ViT(224)の出力に合わせる (224 / 16 * (2 ** 4) = 224)
 
 dataset:
   img_dir: "data/processed/court/images/"
-  annotation_file: "data/processed/court/annotation.json"
+  annotation_file: "data/processed/court/annotation_pruned.json"
   img_size: [224, 224]
   heatmap_size: [224, 224]
-  heatmap_sigma: 2.0
-  batch_size: 32
-  num_workers: 8
+  heatmap_sigma: 3.0
+  batch_size: 48
+  num_workers: 4
   train_ratio: 0.8
   val_ratio: 0.1
   pin_memory: true
-  persistent_workers: true
+  persistent_workers: false
 
 training:
-  max_epochs: 100
+  max_epochs: 15
   lr: 1e-4
+  vit_lr: 1e-5 # ViT用の学習率
   weight_decay: 1e-5
   precision: 16-mixed # より一般的な指定方法
   accelerator: gpu
   devices: 1
+  loss:
+    name: "mse" # mse, bce, focal, kldiv
+    params: {}
+  freeze_vit_epochs: 2 # 最初のNエポックはViTの重みをフリーズする
 
 callbacks:
   checkpoint:
-    monitor: "val/PCK@0.05" # 監視する指標を具体的に
-    mode: max
+    monitor: "val/loss" # 監視する指標を具体的に
+    mode: min
     save_top_k: 3
   early_stopping:
-    monitor: "val/PCK@0.05"
-    mode: max
-    patience: 10
+    monitor: "val/loss"
+    mode: min
+    patience: 3
   heatmap_logger:
     num_samples: 3
 
