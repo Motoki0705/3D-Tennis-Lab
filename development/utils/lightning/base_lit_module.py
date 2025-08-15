@@ -50,6 +50,19 @@ class BaseLitModule(LightningModule):
 
         return loss
 
+    # ====== Test step ======
+    def test_step(self, batch, batch_idx):
+        images, targets = batch
+        preds = self(images)
+        loss = self.loss_fn(preds, targets)
+        self.log("test/loss", loss, prog_bar=True, on_epoch=True)
+
+        for name, fn in self.metric_fns.items():
+            val = fn(preds, targets)
+            self.log(f"test/{name}", val, prog_bar=True, on_epoch=True)
+
+        return loss
+
     # ====== Optimizer設定 ======
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
@@ -66,8 +79,7 @@ class BaseLitModule(LightningModule):
         monitor_metric = None
         if self.metric_fns:
             # 最初のmetric名を監視対象にする
-            monitor_metric = f"val/{list(iter(self.metric_fns.keys()))}"
-
+            monitor_metric = f"val/{next(iter(self.metric_fns.keys()))}"
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
