@@ -41,7 +41,7 @@ class BaseDataModule(pl.LightningDataModule):
     def train_dataloader(self):
         return DataLoader(
             self.train_dataset,
-            batch_size=self.config.dsataset.batch_size,
+            batch_size=self.config.dataset.batch_size,
             shuffle=True,
             num_workers=self.config.dataset.num_workers,
             pin_memory=self.config.dataset.pin_memory,
@@ -51,7 +51,7 @@ class BaseDataModule(pl.LightningDataModule):
     def val_dataloader(self):
         return DataLoader(
             self.val_dataset,
-            batch_size=self.config.dsataset.batch_size,
+            batch_size=self.config.dataset.batch_size,
             num_workers=self.config.dataset.num_workers,
             pin_memory=self.config.dataset.pin_memory,
             persistent_workers=self.config.dataset.persistent_workers,
