@@ -2,7 +2,7 @@
 model:
   vit_name: "vit_base_patch16_224.augreg_in21k" # 事前学習済みモデルをより具体的に指定
   pretrained: true
-  decoder_channels: [256, 128, 64] # 段階的なアップサンプリング
+  decoder_channels: [512, 256, 128, 64] # 段階的なアップサンプリング
   heatmap_channels: 15
   output_size: [224, 224] # ViT(224)の出力に合わせる (224 / 16 * (2 ** 4) = 224)
 
