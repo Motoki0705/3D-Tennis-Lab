@@ -14,12 +14,11 @@ class VitHeatmapModel(nn.Module):
         output_size=(224, 224),
         heatmap_channels=15,
     ):
+        super().__init__()
         if decoder_channels is None:
             decoder_channels = [512, 256, 128, 64]
         self.encoder = VitEncoder(vit_name=vit_name, pretrained=pretrained)
-        self.decoder = UpsamplingDecoder(
-            in_channels=self.encoder.embed_dim, decoder_channels=decoder_channels, output_size=output_size
-        )
+        self.decoder = UpsamplingDecoder(in_channels=self.encoder.embed_dim, decoder_channels=decoder_channels)
         self.head = HeatmapHead(
             in_channels=decoder_channels[-1],
             num_keypoints=heatmap_channels,
