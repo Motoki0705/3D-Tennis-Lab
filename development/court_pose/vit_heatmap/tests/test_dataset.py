@@ -1,7 +1,7 @@
 # filename: development/court_pose/01_vit_heatmap/tests/test_dataset.py
 import torch
 
-from development.court_pose.vit_heatmap_01.dataset import CourtKeypointDataset
+from development.court_pose.vit_heatmap.dataset import CourtKeypointDataset
 
 
 def test_dataset_initialization(dummy_dataset_path, dummy_config):

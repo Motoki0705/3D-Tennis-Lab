@@ -1,7 +1,7 @@
 # filename: development/court_pose/vit_heatmap_01/tests/test_callbacks.py
 import torch
 
-from development.court_pose.vit_heatmap_01.lit_module import CourtLitModule
+from development.court_pose.vit_heatmap.lit_module import CourtLitModule
 from development.utils.callbacks.heatmap_logger import HeatmapImageLogger
 
 

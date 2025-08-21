@@ -56,33 +56,40 @@
 
 #### キーポイント定義
 
-| インデックス | キーポイント名 |
-| :--- | :--- |
-| 0 | `Net-Post_Left` |
-| 1 | `Net-Post_Right` |
-| 2 | `Net-Top_Left` |
-| 3 | `Net-Top_Right` |
-| 4 | `T-Service_Left` |
-| 5 | `T-Service_Right` |
-| 6 | `Center-Service_Line` |
-| 7 | `Sideline-Service_Left` |
-| 8 | `Sideline-Service_Right` |
-| 9 | `Baseline-T_Left` |
-| 10 | `Baseline-T_Right` |
-| 11 | `Baseline-Corner_Left` |
-| 12 | `Baseline-Corner_Right` |
-| 13 | `Sideline-Baseline_Corner_Left` |
-| 14 | `Sideline-Baseline_Corner_Right` |
+| インデックス | キーポイント名                     |
+| :----------- | :--------------------------------- |
+| 0            | `far doubles corner left`          |
+| 1            | `far doubles corner right`         |
+| 2            | `near doubles corner left`         |
+| 3            | `near doubles corner right`        |
+| 4            | `far singles corner left`          |
+| 5            | `near singles corner left`         |
+| 6            | `far singles corner right`         |
+| 7            | `near singles corner right`        |
+| 8            | `far service-line endpoint left`   |
+| 9            | `far service-line endpoint right`  |
+| 10           | `near service-line endpoint left`  |
+| 11           | `near service-line endpoint right` |
+| 12           | `far service T`                    |
+| 13           | `near service T`                   |
+| 14           | `net center`                       |
 
 #### スケルトン定義
 
 以下のキーポイントペアが接続され、コートのラインを形成します。
-(例: `[1, 2]` は `Net-Post_Left` と `Net-Post_Right` を接続)
+(例: `[1, 2]` は `far doubles corner left` と `far doubles corner right` を接続)
 
 ```json
 [
-  [1, 2], [1, 3], [2, 4], [3, 4], [5, 6], 
-  [7, 8], [9, 10], [11, 12], [13, 14]
+  [1, 2],
+  [3, 4],
+  [1, 3],
+  [2, 4],
+  [5, 6],
+  [7, 8],
+  [9, 10],
+  [11, 12],
+  [13, 14]
 ]
 ```
 
