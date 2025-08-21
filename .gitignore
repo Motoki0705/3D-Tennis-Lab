@@ -171,3 +171,14 @@ cython_debug/
 data/
 outputs/
 tb_logs/
+
+# codex cli modules
+node_modules/
+
+# picture files
+*.png
+*.jpg
+*.jpeg
+
+# video files
+*.mp4

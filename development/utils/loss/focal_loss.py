@@ -4,7 +4,6 @@ import torch.nn.functional as F
 
 from .loss_registry import register_loss
 
-
 @register_loss("focal")
 class FocalLoss(nn.Module):
     def __init__(self, alpha=0.25, gamma=2.0, reduction="mean"):
