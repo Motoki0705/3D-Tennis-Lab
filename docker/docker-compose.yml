@@ -6,15 +6,18 @@ services:
       dockerfile: docker/Dockerfile
       target: app-cpu
     ports:
-      - "8888:8888"            # Jupyter 等
+      - "8888:8888" # Jupyter 等
     volumes:
-      - ..:/app                # ソース
-      - ../data:/app/data      # データ
+      - ..:/app # ソース
+      - ../data:/app/data # データ
+      # Hide local virtualenvs inside container
+      - /app/.venv
+      - /app/.venv-wsl
     # 安定化オプション
-    tty: true                  # 対話シェル
-    init: true                 # PID1 に init を入れてゾンビ回収
-    restart: unless-stopped    # 予期せぬ終了から復帰
-    shm_size: "8gb"            # DataLoader / OpenCV 等の共有メモリ増強
+    tty: true # 対話シェル
+    init: true # PID1 に init を入れてゾンビ回収
+    restart: unless-stopped # 予期せぬ終了から復帰
+    shm_size: "8gb" # DataLoader / OpenCV 等の共有メモリ増強
     # 起動直後の重い処理による 137 落ちを避けるため、まず常駐させる
     command: sleep infinity
     environment:
@@ -32,12 +35,15 @@ services:
       dockerfile: docker/Dockerfile
       target: app-cuda
     ports:
-      - "8888:8888"            # Jupyter
-      - "8000:8000"            # FastAPI
-      - "6006:6006"            # TensorBoard
+      - "8888:8888" # Jupyter
+      - "8000:8000" # FastAPI
+      - "6006:6006" # TensorBoard
     volumes:
       - ..:/app
       - ../data:/app/data
+      # Hide local virtualenvs inside container
+      - /app/.venv
+      - /app/.venv-wsl
     # GPU 指定：Compose v2 では deploy: より gpus: all が簡潔・確実
     gpus: all
     tty: true
@@ -49,7 +55,11 @@ services:
       TZ: Asia/Tokyo
       PYTHONUNBUFFERED: "1"
       NVIDIA_VISIBLE_DEVICES: all
-      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,graphics
+      PYOPENGL_PLATFORM: egl
+      EGL_PLATFORM: surfaceless
+      PYGLET_HEADLESS: "1"
+
     healthcheck:
       test: ["CMD-SHELL", "nvidia-smi >/dev/null 2>&1 || exit 1"]
       interval: 30s

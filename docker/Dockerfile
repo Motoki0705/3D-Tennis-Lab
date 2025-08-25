@@ -43,7 +43,7 @@ RUN apt-get update && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
       python3.11 python3.11-venv python3.11-distutils \
-      git ffmpeg libgl1 libglib2.0-0 libgtk2.0-dev build-essential && \
+      git ffmpeg libgl1 libegl1 libglib2.0-0 libgtk2.0-dev build-essential && \
     # 3.11 用の pip を用意
     python3.11 -m ensurepip --upgrade && \
     # python / python3 / pip / pip3 を 3.11 に向ける
@@ -94,6 +94,13 @@ RUN poetry config virtualenvs.create false && \
 # CUDA 12.1 用の PyTorch を明示（CPU 版で上書きされないように）
 RUN poetry run pip install --index-url https://download.pytorch.org/whl/cu121 \
     torch torchvision torchaudio
+
+RUN pip install git+https://github.com/brjathu/PHALP.git
+
+# Install 4D-Humans (hmr2) package with Detectron2 after CUDA Torch is present
+# Copy third_party to build context and install in editable mode
+COPY third_party/4D-Humans /app/third_party/4D-Humans
+RUN poetry run pip install --no-cache-dir -e /app/third_party/4D-Humans[all]
 
 EXPOSE 8888
 CMD ["poetry", "run", "jupyter", "lab", "--ip=0.0.0.0", "--allow-root", "--no-browser"]
