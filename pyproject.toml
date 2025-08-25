@@ -70,36 +70,45 @@ pythonpath = ["."]
 target-version = "py311"
 line-length = 120
 fix = true
+exclude = [
+  ".venv",
+  "build",
+  "dist",
+  ".mypy_cache",
+  ".pytest_cache",
+  "site",
+  "docs/_site",
+]
 
 [tool.ruff.format]
 preview = true
 
 [tool.ruff.lint]
+# 研究用に緩め：最低限のバグ/互換/スタイルに限定
 select = [
-    "YTT",  # flake8-2020
-    "S",    # flake8-bandit
-    "B",    # flake8-bugbear
-    "A",    # flake8-builtins
-    "C4",   # flake8-comprehensions
-    "T10",  # flake8-debugger
-    "SIM",  # flake8-simplify
-    "I",    # isort
-    "C90",  # mccabe
-    "E", "W", # pycodestyle
-    "F",    # pyflakes
-    "PGH",  # pygrep-hooks
-    "UP",   # pyupgrade
-    "RUF",  # ruff
-    "TRY",  # tryceratops
+    "E",    # pycodestyle (一部)
+    "W",    # pycodestyle 警告
+    "F",    # pyflakes（未定義名など致命的）
+    "I",    # isort（インポート整列）
+    "UP",   # pyupgrade（将来互換）
+    "B",    # bugbear（実害の出やすいバグ起因のみ軽く）
+    "C4",   # comprehensions
+    "SIM",  # simplify
+    "RUF",  # ruff 自身の軽いもの
 ]
 ignore = [
-    "E501",  # LineTooLong
-    "E731",  # DoNotAssignLambda
+    "E501",  # 長行は許容（研究メモ等の可読性重視）
 ]
+preview = true
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]
-"development/*" = ["S101"]
+# これらの領域は「かなり緩め」：F（致命的）以外を実質オフ
+"tools/**" = ["E", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+"experiments/**" = ["E", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+"development/**" = ["E", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+"developments/**" = ["E", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+"**/tests/**" = ["E", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+
 
 [tool.coverage.report]
 skip_empty = true

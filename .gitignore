@@ -180,5 +180,8 @@ node_modules/
 *.jpg
 *.jpeg
 
+# annotation files
+*.json
+*.jsonl
 # video files
 *.mp4

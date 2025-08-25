@@ -9,6 +9,7 @@ copyright: Maintained by <a href="https://motoki.com">Florian</a>.
 
 nav:
   - Home: index.md
+  - User Guide: user_guide.md
   - Modules: modules.md
 plugins:
   - search
