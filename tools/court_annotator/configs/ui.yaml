@@ -1,0 +1,39 @@
+# UI related configurations
+
+colors:
+  point_user_visible: [50, 180, 250]
+  point_user_occluded: [40, 120, 200]
+  point_auto: [180, 220, 80]
+  line_user: [60, 220, 60]
+  line_auto: [120, 200, 120]
+  hud_text: [0, 255, 255] # bright yellow for contrast (BGR)
+  hud_shadow: [30, 30, 30]
+  ready_text: [30, 120, 30]
+
+minimap:
+  enabled: true
+  size_px: 240
+  margin_px: 8
+  chip_radius_px: 8
+
+binds:
+  quit: ["q", "Q"]
+  save_annotations: ["s", "S"]
+  toggle_visibility: ["o", "O"]
+  mark_skip: ["m", "M"]
+  toggle_lock: ["k", "K"]
+  recompute: ["r", "R"]
+  copy_prev: [" ", "space"] # Spacebar
+  prev_frame: ["left"]
+  next_frame: ["right"]
+  focus_prev: ["a"]
+  focus_next: ["d"]
+  undo: ["ctrl+z"]
+  redo: ["ctrl+y"]
+  reset_frame: ["ctrl+r"]
+  mark_done: ["ctrl+d"]
+  confirm: ["enter"] # Enter is bound to save by default
+
+mouse:
+  snap_radius_px: 12
+  drag_update_rate_hz: 120

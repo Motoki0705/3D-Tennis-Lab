@@ -1,12 +1,12 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
 // README at: https://github.com/devcontainers/templates/tree/main/src/python
 {
-    "name": "local-llm",
+    "name": "3d-tennis-lab Dev Container",
     // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-    "build": {
-        "dockerfile": "../Dockerfile",
-        "target": "development"
-    },
+    "dockerComposeFile": "../docker/docker-compose.yml",
+    "service": "cuda_dev",
+    "runServices": ["cuda_dev"],
+    "workspaceFolder": "/app",
 
     // Use 'postCreateCommand' to run commands after the container is created.
     "postCreateCommand": "./.devcontainer/postCreateCommand.sh",
@@ -14,13 +14,20 @@
     // Configure tool-specific properties.
     "customizations": {
         "vscode": {
-            "extensions": ["ms-python.python", "editorconfig.editorconfig"],
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "charliermarsh.ruff",
+                "github.copilot",
+                "ms-azuretools.vscode-docker",
+                "eamodio.gitlens",
+                "ryanluker.vscode-coverage-gutters"
+            ],
             "settings": {
-                "python.testing.pytestArgs": ["tests"],
                 "python.testing.unittestEnabled": false,
                 "python.testing.pytestEnabled": true,
-                "python.defaultInterpreterPath": "/workspaces/local-llm/.venv/bin/python",
-                "python.testing.pytestPath": "/workspaces/local-llm/.venv/bin/pytest"
+                "python.defaultInterpreterPath": "/usr/local/bin/python3",
+                "python.testing.pytestPath": "/usr/local/bin/pytest"
             }
         }
     }

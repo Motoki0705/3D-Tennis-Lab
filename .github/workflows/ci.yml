@@ -1,46 +1,34 @@
+# .github/workflows/ci.yml
+
 name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11"]
+    # strategy: matrixはDockerfileでPythonバージョンを固定するため不要になる
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-        cache: 'poetry'
+      - name: Build Docker image
+        run: |
+          docker build -t my-python-app -f docker/Dockerfile .
 
-    - name: Install Poetry
-      uses: snok/install-poetry@v1
-      with:
-        virtualenvs-create: true
-        virtualenvs-in-project: true
+      - name: Run linters and formatters
+        run: |
+          docker run --rm my-python-app poetry run ruff check .
+          docker run --rm my-python-app poetry run ruff format --check .
 
-    - name: Install dependencies
-      run: |
-        poetry install --no-interaction --no-root
+      - name: Run static type checking
+        run: |
+          docker run --rm my-python-app poetry run mypy .
 
-    - name: Run linters and formatters
-      run: |
-        poetry run ruff check .
-        poetry run ruff format --check .
-
-    - name: Run static type checking
-      run: |
-        poetry run mypy .
-
-    - name: Run tests
-      run: |
-        poetry run pytest
+      - name: Run tests
+        run: |
+          docker run --rm my-python-app poetry run pytest

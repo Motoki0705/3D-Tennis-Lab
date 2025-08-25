@@ -1,0 +1,9 @@
+# Example camera intrinsics/distortion for the tennis dataset.
+# Replace with your calibrated values.
+K:
+  fx: 1333.33
+  fy: 1333.33
+  cx: 640.0
+  cy: 360.0
+# Distortion coefficients (OpenCV order). Provide as many as you have.
+dist: [0.0, 0.0, 0.0, 0.0, 0.0]

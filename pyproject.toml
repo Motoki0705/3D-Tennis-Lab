@@ -27,6 +27,24 @@ pytorch-lightning = "^2.5.2"
 opencv-python = "^4.12.0.88"
 numpy = "^2.2.6"
 jupyterlab = "^4.2.3"
+albumentations = "^2.0.8"
+timm = "^1.0.19"
+transformers = "^4.55.0"
+dotmap = "^1.3.30"
+rich = "13.7.1"
+yt-dlp = "^2025.8.11"
+# 4D-Humans demo requirements
+smplx = "==0.1.28"
+pyrender = "^0.1.45"
+yacs = "^0.1.8"
+scikit-image = "^0.24.0"
+einops = "^0.8.0"
+dill = "^0.3.8"
+trimesh = "^4.5.3"
+gdown = "^5.2.0"
+# chumpy and detectron2 are provided via git
+chumpy = {git = "https://github.com/mattloper/chumpy"}
+# For runtime we will install detectron2 after CUDA-ready torch in Dockerfile
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.0"
@@ -46,70 +64,63 @@ requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.mypy]
-files = ["3d_tennis_system", "development"]
-disallow_untyped_defs = "True"
-disallow_any_unimported = "True"
-no_implicit_optional = "True"
-check_untyped_defs = "True"
-warn_return_any = "True"
-warn_unused_ignores = "True"
-show_error_codes = "True"
-
-
+files = ["3d_tennis_system"]
+disallow_untyped_defs = true
+disallow_any_unimported = true
+no_implicit_optional = true
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+show_error_codes = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "development"]
+addopts = "--import-mode=importlib --cov=. --cov-branch --cov-report=xml"
+pythonpath = ["."]
 
 [tool.ruff]
 target-version = "py311"
 line-length = 120
 fix = true
+exclude = [
+  ".venv",
+  "build",
+  "dist",
+  ".mypy_cache",
+  ".pytest_cache",
+  "site",
+  "docs/_site",
+]
 
 [tool.ruff.format]
 preview = true
 
 [tool.ruff.lint]
+# 研究用に緩め：最低限のバグ/互換/スタイルに限定
 select = [
-    # flake8-2020
-    "YTT",
-    # flake8-bandit
-    "S",
-    # flake8-bugbear
-    "B",
-    # flake8-builtins
-    "A",
-    # flake8-comprehensions
-    "C4",
-    # flake8-debugger
-    "T10",
-    # flake8-simplify
-    "SIM",
-    # isort
-    "I",
-    # mccabe
-    "C90",
-    # pycodestyle
-    "E", "W",
-    # pyflakes
-    "F",
-    # pygrep-hooks
-    "PGH",
-    # pyupgrade
-    "UP",
-    # ruff
-    "RUF",
-    # tryceratops
-    "TRY",
+    "E",    # pycodestyle (一部)
+    "W",    # pycodestyle 警告
+    "F",    # pyflakes（未定義名など致命的）
+    "I",    # isort（インポート整列）
+    "UP",   # pyupgrade（将来互換）
+    "B",    # bugbear（実害の出やすいバグ起因のみ軽く）
+    "C4",   # comprehensions
+    "SIM",  # simplify
+    "RUF",  # ruff 自身の軽いもの
 ]
 ignore = [
-    # LineTooLong
-    "E501",
-    # DoNotAssignLambda
-    "E731",
+    "E501",  # 長行は許容（研究メモ等の可読性重視）
 ]
+preview = true
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]
+# これらの領域は「かなり緩め」：F（致命的）以外を実質オフ
+"tools/**" = ["E", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+"experiments/**" = ["E", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+"development/**" = ["E", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+"developments/**" = ["E", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+"**/tests/**" = ["E", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+
 
 [tool.coverage.report]
 skip_empty = true
