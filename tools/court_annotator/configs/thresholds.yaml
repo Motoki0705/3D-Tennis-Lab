@@ -1,0 +1,8 @@
+# Geometric and logical thresholds
+
+rmse_ready: 2.5
+min_used_points: 4
+ransac_reproj_thresh: 2.0
+bound_margin_px: 8
+max_snap_radius_px: 12
+line_snap_radius_px: 6

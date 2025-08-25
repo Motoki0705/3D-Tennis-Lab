@@ -1,0 +1,42 @@
+# Main configuration for the annotator, compatible with Hydra
+
+# Paths are relative to the project root
+video_dir: data/raw/videos
+out_dir: outputs/run2
+
+# Paths to other configuration files, also relative to the project root
+court: tools/court_annotator/configs/courts/tennis_itf.yaml
+thresholds: tools/court_annotator/configs/thresholds.yaml
+ui: tools/court_annotator/configs/ui.yaml
+
+# Default preset for interactive mode
+preset: pipeline/presets/interactive.yaml # Placeholder path
+
+# --- Processing Parameters ---
+completion_strategy: homography
+start: 0
+end: null # null means process until the end
+stride: 1
+init_focus_idx: 0
+
+# --- Navigation ---
+nav:
+  # How many frames arrow keys move
+  arrow_step: 50
+  # How many frames confirm moves when READY
+  confirm_step: 50
+  # Base stride (for resume semantics)
+  stride: 1
+
+# --- Discovery ---
+discover:
+  exts: [".mp4", ".mov", ".mkv", ".avi"]
+  sort: name # name | mtime
+
+# --- Sub-configs ---
+logging:
+  level: INFO
+  file: annotator.log
+
+preprocess:
+  display_scale: 0.7
