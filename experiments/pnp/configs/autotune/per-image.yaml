@@ -1,6 +1,0 @@
-mode: "per-image"
-sample: 32
-dc: 40.0
-nc: 7
-f_scale: 0.2
-nf: 7

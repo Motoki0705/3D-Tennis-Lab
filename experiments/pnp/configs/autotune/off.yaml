@@ -1,6 +1,0 @@
-mode: "off" # 内参自動チューニング無効
-sample: 32 # global用（off時は未使用）
-dc: 40.0 # per-image時のcx,cy探索半幅[pixel]
-nc: 7 # per-image時のcx,cy分割数
-f_scale: 0.2 # per-image時のfx探索幅（±割合）
-nf: 7 # per-image時のfx分割数

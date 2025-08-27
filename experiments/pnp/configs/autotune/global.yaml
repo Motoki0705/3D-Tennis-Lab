@@ -1,6 +1,0 @@
-mode: "global"
-sample: 32 # 何枚を代表サンプルとして使うか
-dc: 60.0 # global探索時のcx,cy半幅
-nc: 7
-f_scale: 0.25
-nf: 7
