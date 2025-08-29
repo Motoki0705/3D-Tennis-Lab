@@ -1,0 +1,17 @@
+out_dir: "data/raw/videos"
+prefer_ext: "mp4"
+max_height: 1080
+concurrent_fragment_downloads: 4
+retries: 5
+fragment_retries: 5
+cookies: null
+archive_file: "data/meta/yt_archive.txt"
+url_archive: "data/meta/url_archive.txt"
+filename_template: "%(title)s-%(id)s.%(ext)s"
+print_formats_on_error: true
+quiet: false
+no_warnings: true
+
+urls:
+  - "https://www.youtube.com/watch?v=F2uJDskg8os"
+  - "https://www.youtube.com/watch?v=xp2mYmNl-lg"
