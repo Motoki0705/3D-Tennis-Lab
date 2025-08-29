@@ -1,0 +1,44 @@
+defaults:
+  - /courts: tennis_itf
+  - /cameras: intrinsics_demo
+  - /optim: lm_robust
+  - _self_
+
+# Bundling parameters (used by multi-bundle runner)
+bundling:
+  strategy: by_prefix
+  params:
+    pattern: "^[^_]+_"
+
+# Shared K granularity: by_bundle | by_scene | global
+cameras_granularity: by_bundle
+
+# Optional default data (override via CLI): expects one of {jsonl, coco, frames}
+data: {}
+
+# Unified pipeline inline definition
+pipeline:
+  stages:
+    - _target_: experiments.pnpkit.src.pipeline.stages.s10_init_homography.InitHomography
+      ransac: { reproj_px: 2.0, iters: 2000, conf: 0.999 }
+    - _target_: experiments.pnpkit.src.pipeline.stages.s20_estimate_k.EstimateK
+      enabled: false
+      skip_if_K_present: false
+      prior_weight: 0.05
+      f_bounds_scale: [0.3, 3.0]
+    - _target_: experiments.pnpkit.src.pipeline.stages.s30_ippe_init.IPPEInit
+    - _target_: experiments.pnpkit.src.pipeline.stages.s70_bundle_adjust.BundleAdjust
+      refine: ${optim.refine}
+      robust: ${optim.robust}
+      schedule: ${optim.schedule}
+      bounds: ${optim.bounds}
+    - _target_: experiments.pnpkit.src.pipeline.stages.s80_evaluate_bundle.EvaluateBundle
+      threshold_px: ${optim.inlier_threshold_px}
+    - _target_: experiments.pnpkit.src.pipeline.stages.s55_viz_overlay.VizOverlay
+      enabled: true
+      num_samples: 3
+      out_dir: experiments/pnpkit/results
+    - _target_: experiments.pnpkit.src.pipeline.stages.s60_export.Export
+      out_dir: experiments/pnpkit/results
+      save_yaml: true
+      save_npz: true

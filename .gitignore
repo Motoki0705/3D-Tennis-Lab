@@ -171,6 +171,7 @@ cython_debug/
 data/
 outputs/
 tb_logs/
+results/
 
 # codex cli modules
 node_modules/
@@ -183,5 +184,6 @@ node_modules/
 # annotation files
 *.json
 *.jsonl
+
 # video files
 *.mp4

@@ -1,0 +1,37 @@
+refine:
+  backend: "scipy" # or "scipy"
+  R: true
+  t: true
+  fx: true
+  fy: true
+  cx: true
+  cy: true
+  dist: true
+
+robust:
+  loss: huber # {huber, soft_l1, cauchy}
+  f_scale: 1.0
+
+schedule:
+  - { unlock: [R, t], max_nfev: 80 }
+  - { unlock: [fx, fy], max_nfev: 80 }
+  - { unlock: [cx, cy], max_nfev: 60 }
+  - { unlock: [dist], max_nfev: 120 }
+
+bounds:
+  fx: [200.0, 10000.0]
+  fy: [200.0, 10000.0]
+  cx: [0.0, 4096.0]
+  cy: [0.0, 4096.0]
+  k: [-0.5, 0.5]
+  p: [-0.1, 0.1]
+
+priors:
+  use: true
+  height_m: { mu: 8.0, sigma: 4.0 }
+  roll_deg: { mu: 0.0, sigma: 10.0 }
+  pitch_deg: { mu: 0.0, sigma: 15.0 }
+  fx_rel: { mu_mult: 1.0, sigma_frac: 0.5 }
+  weight: { height: 1.0, roll: 1.0, pitch: 1.0, fx: 0.1 }
+
+inlier_threshold_px: 3.0
