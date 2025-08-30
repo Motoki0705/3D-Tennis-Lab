@@ -74,7 +74,7 @@ warn_unused_ignores = true
 show_error_codes = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "development"]
+testpaths = ["tests", "development", "experiments"]
 addopts = "--import-mode=importlib --cov=. --cov-branch --cov-report=xml"
 pythonpath = ["."]
 
