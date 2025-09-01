@@ -31,6 +31,11 @@ dataset:
   split:
     train_ratio: 0.8
     val_ratio: 0.1
+  sequence:
+    length: 1 # >1 enables sequence mode; must be odd (e.g., 11)
+    frame_stride: 1 # frame step within the sequence
+    center_version: null # e.g., v1 to center occlusion frames
+    center_span: 1 # odd; require neighbors around center to match version (e.g., 3 for f-1..f+1)
 
 training:
   max_epochs: 30

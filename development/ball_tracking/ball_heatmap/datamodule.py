@@ -28,13 +28,26 @@ class BallDataModule(BaseDataModule):
             sigmas=list(config.dataset.heatmap.sigmas),
         )
 
+        # Unified dataset (sequence-aware). When length==1, acts like single-frame dataset.
+        seq_cfg_obj = getattr(config.dataset, "sequence", None)
+
+        def _seq_get(name, default=None):
+            if seq_cfg_obj is None:
+                return default
+            if isinstance(seq_cfg_obj, dict):
+                return seq_cfg_obj.get(name, default)
+            return getattr(seq_cfg_obj, name, default)
+
         dataset = BallDataset(
             img_dir=config.dataset.img_dir,
             annotation_file=config.dataset.annotation_file,
             img_size=tuple(config.dataset.img_size),
             heatmap_specs=specs,
+            sequence_length=int(_seq_get("length", 1)),
+            frame_stride=int(_seq_get("frame_stride", 1)),
+            center_version=str(_seq_get("center_version", None)) if _seq_get("center_version", None) else None,
+            center_span=int(_seq_get("center_span", 1)),
             negatives=str(config.dataset.negatives),
-            version_field=str(config.dataset.version_field),
             transform=None,  # set after split
         )
 

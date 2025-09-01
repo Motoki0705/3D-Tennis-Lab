@@ -64,6 +64,8 @@ class BallLitModule(LightningModule):
         # Offset supervision mask threshold
         self.offset_tau = float(config.dataset.heatmap.offset_mask_tau)
 
+        self.ds_strides: List[int] = list(config.model.deep_supervision_strides)  # ←追加
+
     # ---- Optimizer with param groups ----
     def configure_optimizers(self):
         vit_params = list(self.model.encoder.parameters())
@@ -75,9 +77,7 @@ class BallLitModule(LightningModule):
             ],
             weight_decay=float(self.config.training.weight_decay),
         )
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", factor=0.1, patience=5, verbose=False
-        )
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.1, patience=5)
         return {"optimizer": optimizer, "lr_scheduler": {"scheduler": scheduler, "monitor": "val/total_loss"}}
 
     # ---- Epoch hooks ----
@@ -97,6 +97,16 @@ class BallLitModule(LightningModule):
         self.log("train/total_loss", out["loss"], prog_bar=True, on_step=True, on_epoch=True)
         self.log("train/loss_heatmap", out["loss_h"], on_epoch=True)
         self.log("train/loss_offset", out["loss_o"], on_epoch=True)
+
+        # NEW: per-scale logs
+        for stride, lh, lo, pr, mae in zip(
+            self.ds_strides, out["loss_h_scales"], out["loss_o_scales"], out["pos_ratio_scales"], out["off_mae_scales"]
+        ):
+            self.log(f"train/loss_h.s{stride}", lh, on_epoch=True)
+            self.log(f"train/loss_o.s{stride}", lo, on_epoch=True)
+            self.log(f"train/pos_ratio.s{stride}", pr, on_epoch=True)
+            self.log(f"train/offset_mae.s{stride}", mae, on_epoch=True)
+
         return out["loss"]
 
     def validation_step(self, batch, batch_idx):
@@ -104,6 +114,15 @@ class BallLitModule(LightningModule):
         self.log("val/total_loss", out["loss"], prog_bar=True, on_epoch=True)
         self.log("val/loss_heatmap", out["loss_h"], on_epoch=True)
         self.log("val/loss_offset", out["loss_o"], on_epoch=True)
+
+        # NEW: per-scale logs
+        for stride, lh, lo, pr, mae in zip(
+            self.ds_strides, out["loss_h_scales"], out["loss_o_scales"], out["pos_ratio_scales"], out["off_mae_scales"]
+        ):
+            self.log(f"val/loss_h.s{stride}", lh, on_epoch=True)
+            self.log(f"val/loss_o.s{stride}", lo, on_epoch=True)
+            self.log(f"val/pos_ratio.s{stride}", pr, on_epoch=True)
+            self.log(f"val/offset_mae.s{stride}", mae, on_epoch=True)
 
         # PCK metrics: (1) heatmap-only argmax, (2) argmax+offset in image space
         pred_hmap_hi = out["pred_heatmaps"][-1]
@@ -145,10 +164,8 @@ class BallLitModule(LightningModule):
     # ---- Core ----
     def _forward_and_loss(self, batch) -> Dict[str, torch.Tensor]:
         images: torch.Tensor = batch["image"]
-        tgt_hmaps: List[torch.Tensor] = batch["heatmaps"]  # list of [B,1,Hs,Ws]
-        tgt_offs: List[torch.Tensor] = batch["offsets"]  # list of [B,2,Hs,Ws]
-
-        # Ensure tensors are on device
+        tgt_hmaps: List[torch.Tensor] = batch["heatmaps"]
+        tgt_offs: List[torch.Tensor] = batch["offsets"]
         tgt_hmaps = [t.to(images.device) for t in tgt_hmaps]
         tgt_offs = [t.to(images.device) for t in tgt_offs]
 
@@ -156,26 +173,42 @@ class BallLitModule(LightningModule):
         pred_hmaps: List[torch.Tensor] = outputs["heatmaps"]
         pred_offs: List[torch.Tensor] = outputs["offsets"]
 
-        # Loss per scale
+        # NEW: per-scale holders
+        loss_h_scales: List[torch.Tensor] = []
+        loss_o_scales: List[torch.Tensor] = []
+        pos_ratio_scales: List[torch.Tensor] = []
+        off_mae_scales: List[torch.Tensor] = []
+
         loss_h_total = 0.0
         loss_o_total = 0.0
+
         for s, (wh, ph, wo, po, w) in enumerate(zip(tgt_hmaps, pred_hmaps, tgt_offs, pred_offs, self.deep_w)):
             # Heatmap loss
             if self.focal_loss is not None:
-                # Focal expects logits with binary targets
                 bin_wh = (wh >= self.pos_mask_tau).float()
                 loss_h = self.focal_loss(ph, bin_wh)
+                pos_ratio = bin_wh.mean()
             else:
                 loss_h = weighted_mse_loss(ph, wh, pos_weight=self.pos_weight, pos_mask_tau=self.pos_mask_tau)
+                pos_ratio = (wh >= self.pos_mask_tau).float().mean()
 
             # Offset loss with mask from target heatmap
             mask = (wh > self.offset_tau).float()
             if mask.sum() > 0:
-                # L1 over masked elements, averaged over positives
                 l1 = (torch.abs(po - wo) * mask).sum() / mask.sum()
+                # 参考: MAE(px) をログ用に
+                off_mae = l1.detach()
             else:
                 l1 = torch.zeros((), device=images.device)
+                off_mae = torch.zeros((), device=images.device)
 
+            # collect per-scale (unweighted) values
+            loss_h_scales.append(loss_h.detach())
+            loss_o_scales.append(l1.detach())
+            pos_ratio_scales.append(pos_ratio.detach())
+            off_mae_scales.append(off_mae)
+
+            # deep supervision の重みで合算
             loss_h_total = loss_h_total + w * loss_h
             loss_o_total = loss_o_total + w * l1
 
@@ -188,6 +221,11 @@ class BallLitModule(LightningModule):
             "pred_heatmaps": pred_hmaps,
             "pred_offsets": pred_offs,
             "tgt_heatmaps": tgt_hmaps,
+            # NEW: per-scale tensors (lists)
+            "loss_h_scales": loss_h_scales,
+            "loss_o_scales": loss_o_scales,
+            "pos_ratio_scales": pos_ratio_scales,  # 正例画素の割合
+            "off_mae_scales": off_mae_scales,  # offset の MAE(px)
         }
 
     # ---- Metrics ----
