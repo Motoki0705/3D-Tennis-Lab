@@ -1,4 +1,5 @@
-# tests/callbacks/test_heatmap_logger_v2.py
+# tests/test_heatmap_logger_v2.py
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 from types import SimpleNamespace

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List, Optional
 import torch
 
-import pytorch_lightning as Callback
+from pytorch_lightning import Callback, LightningModule, Trainer
 from torchvision.utils import make_grid, draw_keypoints
 
 
@@ -14,7 +14,7 @@ class HeatmapLoggerV2(Callback):
         self.draw_multiscale = draw_multiscale
         self._buffer = None
 
-    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+    def on_validation_batch_end(self, trainer: Trainer, pl_module: LightningModule, outputs, batch, batch_idx):
         if batch_idx > 0:
             return
         self._buffer = outputs  # keep CPU tensors as prepared by validation_step
@@ -73,7 +73,7 @@ class HeatmapLoggerV2(Callback):
         return grid
 
     def on_validation_epoch_end(self, trainer, pl_module):
-        if not trainer.logger or not self._buffer:
+        if not getattr(trainer, "logger", None) or self._buffer is None:
             return
         writer = trainer.logger.experiment
 
@@ -99,7 +99,8 @@ class HeatmapLoggerV2(Callback):
 
         # ★ ここから overlay の追加：pred(ヒートマップ+オフセット) vs GT
         have_offs = "pred_offsets" in self._buffer and len(self._buffer["pred_offsets"]) > 0
-        have_gt = "gt_coords_img" in self._buffer and "valid_mask" in self._buffer
+        # valid_mask is optional; if absent, treat all as valid
+        have_gt = "gt_coords_img" in self._buffer
         if have_offs and have_gt and "pred_heatmaps" in self._buffer and len(self._buffer["pred_heatmaps"]) > 0:
             # 最終スケール（通常は最高解像度）を使用
             pred_hmap_hi: torch.Tensor = self._buffer["pred_heatmaps"][-1]
@@ -114,10 +115,19 @@ class HeatmapLoggerV2(Callback):
             # [B,2] 画像座標
             pred_xy_img = self._coords_from_hmap_and_offset_img(pred_hmap_hi, pred_off_hi, stride)
             gt_xy_img = self._buffer["gt_coords_img"]
-            valid = self._buffer["valid_mask"].view(-1)
+            valid = self._buffer.get("valid_mask", None)
+            if valid is not None:
+                valid = valid.view(-1)
 
             # サンプル数をそろえる
-            B = min(images.shape[0], pred_xy_img.shape[0], gt_xy_img.shape[0], valid.shape[0])
-            grid = self._draw_overlay(images[:B], pred_xy_img[:B], gt_xy_img[:B], valid[:B])
+            if valid is not None:
+                B = min(images.shape[0], pred_xy_img.shape[0], gt_xy_img.shape[0], valid.shape[0])
+                grid = self._draw_overlay(images[:B], pred_xy_img[:B], gt_xy_img[:B], valid[:B])
+            else:
+                B = min(images.shape[0], pred_xy_img.shape[0], gt_xy_img.shape[0])
+                grid = self._draw_overlay(images[:B], pred_xy_img[:B], gt_xy_img[:B], None)
 
             writer.add_image("val/overlay_pred_gt", grid, global_step=pl_module.current_epoch)
+
+        # clear buffer after logging
+        self._buffer = None
