@@ -1,0 +1,17 @@
+lambda_hm: 1.0
+lambda_speed: 1.0
+lambda_vis: 1.0
+lambda_v: 0.0
+lambda_a: 0.0
+lambda_peakc: 0.0
+lambda_rank: 0.0
+lambda_sharp: 0.0
+lambda_pk: 0.0
+
+# Heatmap loss selection: one of [mse, focal, kl]
+hm_type: mse
+focal_gamma: 2.0
+kl_tau: 1.0
+
+# Detection accuracy threshold (pixels)
+acc_threshold_px: 8.0

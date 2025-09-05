@@ -1,0 +1,6 @@
+name: kalman
+fuse: true
+kalman:
+  q_pos: 1.0
+  q_vel: 0.1
+  r_det: 2.0
