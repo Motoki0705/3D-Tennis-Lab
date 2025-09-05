@@ -44,9 +44,9 @@ def train(cfg: DictConfig) -> None:
     callbacks = []
     # Callback to save the best models based on validation loss
     checkpoint_callback = ModelCheckpoint(
-        monitor="val/loss",
+        monitor="val/total",
         dirpath=ckpt_dir,
-        filename=f"{cfg.semisup.name}-ball-heatmap-{{epoch:02d}}-{{val/loss:.2f}}",
+        filename=f"{cfg.semisup.name}-ball-heatmap-{{epoch:02d}}-{{val/total:.2f}}",
         save_top_k=3,
         mode="min",
     )

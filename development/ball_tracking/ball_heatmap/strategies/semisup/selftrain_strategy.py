@@ -70,9 +70,9 @@ class SelfTrainStrategy(SemisupStrategy):
         weak_btc = weak  # already [B,T,C,H,W]
         preds_t = teacher(weak_btc)
         # Build pseudo-targets
-        hm_pseudo: List[torch.Tensor] = [p.detach() for p in preds_t["hm"]]
+        hm_pseudo: List[torch.Tensor] = [p.detach() for p in preds_t["heatmaps"]]
         speed_pseudo: torch.Tensor = preds_t["speed"].detach()
-        vis_state_pseudo = preds_t["vis_state_logits"].detach().argmax(dim=-1)
+        vis_state_pseudo = preds_t["vis_logits"].detach().argmax(dim=-1)
 
         # Quality per-frame
         physics_score = None  # module.physics_score if available

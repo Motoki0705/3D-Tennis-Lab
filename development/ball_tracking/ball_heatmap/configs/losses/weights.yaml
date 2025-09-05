@@ -1,12 +1,16 @@
+# Core losses
 lambda_hm: 1.0
-lambda_speed: 1.0
-lambda_vis: 1.0
-lambda_v: 0.0
-lambda_a: 0.0
-lambda_peakc: 0.0
-lambda_rank: 0.0
-lambda_sharp: 0.0
-lambda_pk: 0.0
+lambda_off: 0.5
+lambda_vis: 0.1
+
+# Time-series regularization
+lambda_v: 0.1
+lambda_a: 0.05
+lambda_rank: 0.02
+
+# Confidence / Sharpening
+lambda_sharp: 0.001
+lambda_peak: 0.001
 
 # Heatmap loss selection: one of [mse, focal, kl]
 hm_type: mse
