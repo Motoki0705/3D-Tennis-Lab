@@ -5,7 +5,7 @@ from typing import Any
 
 try:
     import pytorch_lightning as pl
-    from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping, RichProgressBar
+    from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
 except Exception as e:
     # Lazy import error will be raised at runtime in run()
     pl = None  # type: ignore
@@ -66,7 +66,6 @@ class TrainRunner(BaseRunner):
 
         lr_cb = LearningRateMonitor(logging_interval="epoch")
         es_cb = EarlyStopping(monitor="val/loss", mode="min", patience=5)
-        bar_cb = RichProgressBar()
 
         # TensorBoard logger under tb_logs/<experiment_name>/version_*/
         exp_name = getattr(self.cfg, "experiment_name", "hrnet_finetune")
@@ -84,7 +83,7 @@ class TrainRunner(BaseRunner):
         )
 
         # Optional heatmap callback
-        cb_list = [ckpt_cb, lr_cb, es_cb, bar_cb]
+        cb_list = [ckpt_cb, lr_cb, es_cb]
         if hasattr(self.cfg, "callbacks") and hasattr(self.cfg.callbacks, "tb_image_logger"):
             c = self.cfg.callbacks.tb_image_logger
             cb_list.append(

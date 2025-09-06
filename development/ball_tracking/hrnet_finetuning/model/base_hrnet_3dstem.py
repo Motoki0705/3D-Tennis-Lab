@@ -49,19 +49,11 @@ class HRNet3DStem(nn.Module):
         stem3d = cfg["MODEL"]["EXTRA"].get("STEM3D", {})
         # depth kernel sizes for conv1/conv2 in time axis (kD1, kD2)
         kds = stem3d.get("KERNELS_D", None)
-        if isinstance(kds, (list, tuple)) and len(kds) == 2:
-            self._stem3d_kd1, self._stem3d_kd2 = int(kds[0]), int(kds[1])
-        else:
-            kd = int(stem3d.get("KERNEL_D", 3))
-            self._stem3d_kd1 = kd
-            self._stem3d_kd2 = kd
+        self._stem3d_kd1, self._stem3d_kd2 = int(kds[0]), int(kds[1])
+
         # depth strides for conv1/conv2 in time axis (sD1, sD2)
         sds = stem3d.get("STRIDES_D", None)
-        if isinstance(sds, (list, tuple)) and len(sds) == 2:
-            self._stem3d_sd1, self._stem3d_sd2 = int(sds[0]), int(sds[1])
-        else:
-            self._stem3d_sd1 = 1
-            self._stem3d_sd2 = 1
+        self._stem3d_sd1, self._stem3d_sd2 = int(sds[0]), int(sds[1])
 
         self._agg: str = str(stem3d.get("AGG", "mean")).lower()  # 'mean'|'max'|'center'
 

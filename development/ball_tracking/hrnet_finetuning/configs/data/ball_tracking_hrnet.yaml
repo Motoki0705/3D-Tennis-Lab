@@ -2,9 +2,9 @@ defaults:
   - augmentation: default
   - _self_
 
-images_root: "/path/to/your/images"  # PLEASE FILL IN THIS PATH
-labeled_json_train: "/path/to/your/train_annotation.json" # PLEASE FILL IN THIS PATH
-labeled_json_val: "/path/to/your/val_annotation.json" # PLEASE FILL IN THIS PATH
+images_root: "data/processed/ball/images"  # PLEASE FILL IN THIS PATH
+labeled_json_train: "data/processed/ball/annotation.json" # PLEASE FILL IN THIS PATH
+labeled_json_val: "data/processed/ball/non_annotation.json" # PLEASE FILL IN THIS PATH
 
 img_size: [288, 512]
 T: 3
