@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Tuple
+from typing import Tuple, Optional
 
 import numpy as np
 import torch
@@ -41,6 +41,14 @@ class InferRunner(BaseRunner):
             self.model = self.model.double()
         else:
             self.model = self.model.float()
+
+        # Tracker params (with safe defaults if not in config)
+        self.track_tail: int = int(getattr(cfg.infer, "track_tail", 30))
+        self.hm_threshold: float = float(getattr(cfg.infer, "hm_threshold", 0.2))
+        self.track_max_missed: int = int(getattr(cfg.infer, "track_max_missed", 30))
+        self.overlay_heatmap: bool = bool(getattr(cfg.infer, "overlay_heatmap", False))
+        self.draw_radius: int = int(getattr(cfg.infer, "draw_radius", 5))
+        self.draw_thickness: int = int(getattr(cfg.infer, "draw_thickness", 2))
 
     @staticmethod
     def _to_tensor(frames: np.ndarray, mean, std, dtype="float32") -> torch.Tensor:
@@ -99,6 +107,86 @@ class InferRunner(BaseRunner):
         blended = cv2.addWeighted(frame_bgr, 0.6, color, 0.4, 0)
         return blended
 
+    @staticmethod
+    def _heatmap_to_point(
+        hm: np.ndarray, frame_size_hw: Tuple[int, int]
+    ) -> Tuple[Optional[Tuple[float, float]], float]:
+        """
+        Convert heatmap to pixel coordinates (x, y) in the resized frame.
+
+        Returns (point or None, confidence[0..1]). Confidence is derived from
+        normalized heatmap peak value.
+        """
+        if isinstance(hm, torch.Tensor):
+            hm_np = hm.detach().cpu().float().numpy()
+        else:
+            hm_np = np.asarray(hm, dtype=np.float32)
+        if hm_np.ndim == 3:
+            # Heuristic: use last channel as in upstream code, or max over channels
+            hm_np = hm_np[-1] if hm_np.shape[0] > 1 else hm_np[0]
+
+        # Normalize 0..1 for a relative confidence
+        mmin = float(hm_np.min())
+        hm_norm = hm_np - mmin
+        mmax = float(hm_norm.max())
+        if mmax > 0:
+            hm_norm = hm_norm / mmax
+        else:
+            return None, 0.0
+
+        # Peak
+        idx = np.argmax(hm_norm)
+        py_hm, px_hm = np.unravel_index(int(idx), hm_norm.shape)  # row, col (y, x)
+        conf = float(hm_norm[py_hm, px_hm])
+
+        # Subpixel refinement using local weighted centroid (3x3 window)
+        y0, y1 = max(py_hm - 1, 0), min(py_hm + 2, hm_norm.shape[0])
+        x0, x1 = max(px_hm - 1, 0), min(px_hm + 2, hm_norm.shape[1])
+        patch = hm_norm[y0:y1, x0:x1]
+        if patch.size > 0 and patch.sum() > 0:
+            ys, xs = np.mgrid[y0:y1, x0:x1]
+            py_hm_ref = float((ys * patch).sum() / patch.sum())
+            px_hm_ref = float((xs * patch).sum() / patch.sum())
+        else:
+            py_hm_ref, px_hm_ref = float(py_hm), float(px_hm)
+
+        Hf, Wf = frame_size_hw
+        Hy, Wx = hm_norm.shape[0], hm_norm.shape[1]
+        sx, sy = float(Wf) / float(Wx), float(Hf) / float(Hy)
+        px = px_hm_ref * sx
+        py = py_hm_ref * sy
+        return (px, py), conf
+
+    @staticmethod
+    def _draw_tracking(
+        cv2,
+        frame_bgr: np.ndarray,
+        trail_xy: list[Tuple[float, float]],
+        cur_xy: Tuple[float, float],
+        radius: int = 5,
+        thickness: int = 2,
+    ) -> np.ndarray:
+        img = frame_bgr.copy()
+        # Draw trail as fading line segments
+        n = len(trail_xy)
+        if n >= 2:
+            for i in range(1, n):
+                a = trail_xy[i - 1]
+                b = trail_xy[i]
+                # Fade color older->newer (light blue -> yellow)
+                t = i / (n - 1 + 1e-6)
+                color = (
+                    int(255 * (1.0 - t)),  # B
+                    int(200 * t + 50 * (1.0 - t)),  # G
+                    int(50 + 205 * t),  # R
+                )
+                cv2.line(img, (int(a[0]), int(a[1])), (int(b[0]), int(b[1])), color, thickness)
+
+        # Draw current point
+        cv2.circle(img, (int(cur_xy[0]), int(cur_xy[1])), radius, (0, 0, 255), -1)
+        cv2.circle(img, (int(cur_xy[0]), int(cur_xy[1])), max(1, radius + 2), (255, 255, 255), 1)
+        return img
+
     def run(self):
         cfg = self.cfg
         cap, cv2 = self._open_video(abspath(cfg.infer.video_path))
@@ -106,6 +194,16 @@ class InferRunner(BaseRunner):
         out_writer = None
         if cfg.infer.output_video:
             out_writer = self._init_writer(cv2, abspath(cfg.infer.output_video), fps, (self.input_h, self.input_w))
+
+        # Build tracker
+        from ..tracker import BallTracker
+
+        tracker = BallTracker(
+            image_size_hw=(self.input_h, self.input_w),
+            history_len=self.track_tail,
+            min_conf=self.hm_threshold,
+            max_missed=self.track_max_missed,
+        )
 
         if cfg.infer.save_heatmaps_dir:
             os.makedirs(abspath(cfg.infer.save_heatmaps_dir), exist_ok=True)
@@ -152,9 +250,33 @@ class InferRunner(BaseRunner):
             y = y_out[scale][0]
             hm = y[-1] if (y.ndim == 3 and y.shape[0] > 1) else (y[0] if y.ndim == 3 else y.squeeze(0))
 
+            # Measurement from heatmap
+            meas_xy, conf = self._heatmap_to_point(hm, (self.input_h, self.input_w))
+            est_xy = tracker.update(meas_xy, conf)
+
+            # Compose output frame
+            if self.overlay_heatmap:
+                disp = self._overlay_heatmap(cv2, frame, hm)
+            else:
+                disp = frame
+
+            trail = tracker.get_trail(self.track_tail)
+            disp = self._draw_tracking(cv2, disp, trail, est_xy, radius=self.draw_radius, thickness=self.draw_thickness)
+
+            # Optional: draw debug text
+            cv2.putText(
+                disp,
+                f"conf={conf:.2f} missed={tracker.missed}",
+                (10, 25),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (255, 255, 255),
+                2,
+                cv2.LINE_AA,
+            )
+
             if out_writer is not None:
-                over = self._overlay_heatmap(cv2, frame, hm)
-                out_writer.write(over)
+                out_writer.write(disp)
 
             if cfg.infer.save_heatmaps_dir:
                 np.save(
