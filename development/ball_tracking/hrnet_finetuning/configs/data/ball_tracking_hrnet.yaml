@@ -9,7 +9,7 @@ labeled_json_val: "data/processed/ball/non_annotation.json" # PLEASE FILL IN THI
 img_size: [288, 512]
 T: 3
 frame_stride: 1
-output_stride: 4
+output_stride: 1
 sigma_px: 3.0
 
 batch_size: 8
