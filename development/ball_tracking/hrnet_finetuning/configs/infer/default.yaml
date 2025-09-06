@@ -1,0 +1,11 @@
+video_path: "data/sample_videos/input.mp4"
+output_video: "outputs/hrnet_infer/output.mp4"
+save_heatmaps_dir: null # e.g., "outputs/hrnet_infer/heatmaps"
+checkpoint: "development/ball_tracking/hrnet_finetuning/weight/wasb_tennis_best_3dstem.pth.tar"
+input_size: [288, 512] # H, W for resizing frames
+batch_size: 4
+stride: 1 # window stride over frames
+normalize:
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+dtype: float32 # float32 | float16

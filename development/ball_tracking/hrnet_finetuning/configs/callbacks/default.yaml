@@ -1,0 +1,5 @@
+tb_image_logger:
+  every_n_steps: 200
+  num_samples: 2
+  mode: val # train or val
+  log_overlay: true
