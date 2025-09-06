@@ -8,7 +8,6 @@ from .frame import (
     heatmap_loss,
     speed_huber,
     vis_ce,
-    offset_huber,
 )
 from .regularization import (
     tv_loss,
@@ -53,12 +52,6 @@ class LossComposer:
                 self.w.lambda_hm * loss_hm + self.w.lambda_speed * loss_speed + self.w.lambda_vis * loss_vis
             )
             log_dict.update({"sup/hm": loss_hm, "sup/speed": loss_speed, "sup/vis": loss_vis})
-
-            # --- Optional Losses ---
-            if self.w.lambda_off > 0 and "offset" in preds and "offset" in targets:
-                loss_off = offset_huber(preds["offset"], targets["offset"].to(device), mask_hm)
-                total_sup_loss = total_sup_loss + self.w.lambda_off * loss_off
-                log_dict["sup/offset"] = loss_off
 
             # For TV losses, calculate coordinates once from the highest-resolution heatmap
             if self.w.lambda_v > 0 or self.w.lambda_a > 0:

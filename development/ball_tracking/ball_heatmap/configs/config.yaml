@@ -12,7 +12,7 @@ seed: 42
 model:
   backbone:
     embed_dim: 96
-    depths: [2, 2, 6, 2]
+    depths: [1, 2, 4, 2]
     num_heads: [3, 6, 12, 24]
     window_size: 7
     drop_path_rate: 0.1
@@ -22,7 +22,7 @@ model:
       num_experts: 4
   temporal_encoder:
     enabled: true
-    strides: [8, 16, 32]
+    strides: [16, 32]
   temporal:
     enabled: true
   deep_supervision_strides: [8, 16, 32]
@@ -30,23 +30,6 @@ model:
   heatmap_channels: 1
   heads:
     hidden: 256
-
-data:
-  images_root: data/processed/ball/images
-  labeled_json: data/processed/ball/annotation.json
-  unlabeled_json: data/processed/ball/non_annotation.json
-  img_size: [320, 640] # H, W
-  T: 9
-  frame_stride: 1
-  scales: [8, 16, 32]
-  sigma_px: [2.0, 3.0, 4.0]
-  supervise_hm_on_v1: false
-  batch_size: 4
-  num_workers: 4
-  pin_memory: true
-  drop_last: true
-  shuffle: true
-  val_split: 0.1
 
 streams:
   unlabeled_ratio: 1.0
@@ -79,8 +62,15 @@ tracker:
 
 opt:
   lr_backbone: 1e-4
-  lr_heads: 5e-4
+  lr_heads: 1e-4
   wd: 0.05
+  scheduler:
+    type: "cosine" # (reserved for future variants)
+    interval: "epoch" # "epoch" or "step"
+    warmup_epochs: 5 # if interval=="epoch"
+    warmup_steps: null # if interval=="step", set an int or leave null to derive from warmup_epochs
+    warmup_start_factor: 0.1 # LR multiplier at start of warmup (0.1 → 10% of base LR)
+    min_lr: 1e-6 # eta_min
 
 trainer:
   _target_: pytorch_lightning.Trainer

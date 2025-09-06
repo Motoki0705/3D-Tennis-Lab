@@ -105,14 +105,3 @@ def vis_ce(logits: torch.Tensor, vis_state: torch.Tensor) -> torch.Tensor:
     """logits: [B,T,3]; vis_state: [B,T] Long"""
     B, T, C = logits.shape
     return F.cross_entropy(logits.float().view(B * T, C), vis_state.view(B * T), reduction="mean")
-
-
-def offset_huber(
-    pred_offset: torch.Tensor, tgt_offset: torch.Tensor, mask: torch.Tensor, delta: float = 1.0
-) -> torch.Tensor:
-    """pred_offset/tgt_offset: [B,T,2]; mask: [B,T]"""
-    diff = pred_offset.float() - tgt_offset.float()
-    loss = F.huber_loss(diff, torch.zeros_like(diff), delta=delta, reduction="none")
-    loss = loss.sum(dim=-1)
-    loss = (loss * mask.float()).mean()
-    return loss

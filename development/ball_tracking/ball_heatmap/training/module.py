@@ -41,6 +41,7 @@ class BallLightningModule(pl.LightningModule):
         return self.model(x_btc, x_strong)
 
     def configure_optimizers(self):
+        # --- Optimizers ---
         params = [
             {"params": self.model.encoder.parameters(), "lr": self.cfg.opt.lr_backbone},
             {
@@ -50,11 +51,107 @@ class BallLightningModule(pl.LightningModule):
         ]
         opt_g = torch.optim.AdamW(params, weight_decay=self.cfg.opt.wd)
 
-        if self.adversary and self.cfg.gan.get("enable", False):
-            opt_d = self.adversary.opt_d
-            return opt_g, opt_d
+        # Helper to build (Linear warmup -> Cosine) scheduler
+        def _build_cosine_scheduler(optimizer, cfg_sched, *, default_name: str, is_step_based: bool):
+            # Defaults & reads
+            warmup_start_factor = float(getattr(cfg_sched, "warmup_start_factor", 0.1))
+            min_lr = float(getattr(cfg_sched, "min_lr", 1e-6))
 
-        return opt_g
+            if is_step_based:
+                # Step-based scheduling
+                # Derive steps
+                total_steps = int(getattr(self.trainer, "estimated_stepping_batches", 0))
+                if total_steps <= 0:
+                    # Fallback: epochs * steps_per_epoch
+                    steps_per_epoch = max(1, getattr(self.trainer, "num_training_batches", 0))
+                    total_steps = max(1, steps_per_epoch * max(1, self.trainer.max_epochs))
+                # Warmup steps
+                warmup_steps = getattr(cfg_sched, "warmup_steps", None)
+                if warmup_steps is None:
+                    warmup_epochs = int(getattr(cfg_sched, "warmup_epochs", 0))
+                    steps_per_epoch = max(1, total_steps // max(1, self.trainer.max_epochs))
+                    warmup_steps = max(0, warmup_epochs * steps_per_epoch)
+                warmup_steps = int(warmup_steps)
+                # T_max after warmup
+                t_max = max(1, total_steps - warmup_steps)
+
+                warmup = (
+                    torch.optim.lr_scheduler.LinearLR(
+                        optimizer,
+                        start_factor=warmup_start_factor,
+                        total_iters=max(1, warmup_steps),
+                    )
+                    if warmup_steps > 0
+                    else None
+                )
+
+                cosine = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=t_max, eta_min=min_lr)
+
+                if warmup is None:
+                    sched = cosine
+                    interval = "step"
+                else:
+                    sched = torch.optim.lr_scheduler.SequentialLR(
+                        optimizer, schedulers=[warmup, cosine], milestones=[warmup_steps]
+                    )
+                    interval = "step"
+
+            else:
+                # Epoch-based scheduling
+                max_epochs = int(getattr(self.trainer, "max_epochs", 1))
+                warmup_epochs = int(getattr(cfg_sched, "warmup_epochs", 0))
+                t_max = max(1, max_epochs - warmup_epochs)
+
+                warmup = (
+                    torch.optim.lr_scheduler.LinearLR(
+                        optimizer,
+                        start_factor=warmup_start_factor,
+                        total_iters=max(1, warmup_epochs),
+                    )
+                    if warmup_epochs > 0
+                    else None
+                )
+
+                cosine = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=t_max, eta_min=min_lr)
+
+                if warmup is None:
+                    sched = cosine
+                else:
+                    sched = torch.optim.lr_scheduler.SequentialLR(
+                        optimizer, schedulers=[warmup, cosine], milestones=[warmup_epochs]
+                    )
+                interval = "epoch"
+
+            return {
+                "scheduler": sched,
+                "interval": interval,  # "epoch" or "step"
+                "frequency": 1,
+                "name": default_name,
+            }
+
+        # --- Generator scheduler ---
+        sched_cfg = getattr(self.cfg.opt, "scheduler", {})
+        is_step_based = str(getattr(sched_cfg, "interval", "epoch")).lower() == "step"
+        sch_g = _build_cosine_scheduler(opt_g, sched_cfg, default_name="cosine_g", is_step_based=is_step_based)
+
+        # --- With adversary (optional) ---
+        if self.adversary and self.cfg.gan.get("enable", False):
+            # Expect your adversary to expose its optimizer (opt_d) already.
+            opt_d = self.adversary.opt_d
+
+            # If you also want a cosine schedule for D, either:
+            # 1) mirror cfg under self.cfg.gan.scheduler, or
+            # 2) reuse the generator's scheduler config.
+            gan_sched_cfg = getattr(self.cfg.gan, "scheduler", sched_cfg)
+            is_step_based_d = str(getattr(gan_sched_cfg, "interval", "epoch")).lower() == "step"
+            sch_d = _build_cosine_scheduler(
+                opt_d, gan_sched_cfg, default_name="cosine_d", is_step_based=is_step_based_d
+            )
+
+            return [opt_g, opt_d], [sch_g, sch_d]
+
+        # --- No adversary ---
+        return {"optimizer": opt_g, "lr_scheduler": sch_g}
 
     def _construct_trajectory(self, preds: Dict = None, targets: Dict = None) -> torch.Tensor:
         if preds:
