@@ -1,0 +1,20 @@
+defaults:
+  - augmentation: default
+  - _self_
+
+images_root: "/path/to/your/images"  # PLEASE FILL IN THIS PATH
+labeled_json_train: "/path/to/your/train_annotation.json" # PLEASE FILL IN THIS PATH
+labeled_json_val: "/path/to/your/val_annotation.json" # PLEASE FILL IN THIS PATH
+
+img_size: [288, 512]
+T: 3
+frame_stride: 1
+output_stride: 4
+sigma_px: 3.0
+
+batch_size: 8
+num_workers: 4
+
+normalize:
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]

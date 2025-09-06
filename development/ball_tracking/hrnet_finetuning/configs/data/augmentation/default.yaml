@@ -1,0 +1,11 @@
+p_horizontal_flip: 0.5
+p_affine: 0.5
+scale_limit: 0.1
+shift_limit: 0.1
+p_blur: 0.3
+blur_limit: 5
+p_color_jitter: 0.5
+brightness_limit: 0.2
+contrast_limit: 0.2
+saturation_limit: 0.2
+hue_limit: 0.1
