@@ -1,22 +1,24 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Tuple
 
 import torch
 import pytorch_lightning as pl
-
 
 logger = logging.getLogger(__name__)
 
 
 class TensorBoardHeatmapLogger(pl.Callback):
     """
-    Logs GT and prediction heatmaps to TensorBoard every N steps.
+    Logs:
+      - the last RGB frame with GT/PRED peak points
+      - standalone GT/PRED heatmaps (grayscale, 3ch)
+    to TensorBoard every N steps.
 
     Expects batch to be (x, y) or dict with keys, where:
       - x: (B, C, T, H, W) or (B, 3*T, H, W)
-      - y: (B, 1, H', W') predicted heatmap shape matches model output (scale 0)
+      - y: (B, 1, H', W')
     """
 
     def __init__(
@@ -24,13 +26,18 @@ class TensorBoardHeatmapLogger(pl.Callback):
         every_n_steps: int = 200,
         num_samples: int = 2,
         mode: str = "val",  # "train" or "val"
-        log_overlay: bool = True,
+        # new options for point rendering
+        marker_radius: int = 4,
+        pred_color: Tuple[float, float, float] = (1.0, 0.0, 0.0),  # red
+        gt_color: Tuple[float, float, float] = (0.0, 1.0, 0.0),  # green
     ) -> None:
         super().__init__()
         self.every_n_steps = int(every_n_steps)
         self.num_samples = int(num_samples)
         self.mode = str(mode)
-        self.log_overlay = bool(log_overlay)
+        self.marker_radius = int(marker_radius)
+        self.pred_color = tuple(float(c) for c in pred_color)
+        self.gt_color = tuple(float(c) for c in gt_color)
 
     # ------------------------------ helpers ------------------------------
     @staticmethod
@@ -46,10 +53,8 @@ class TensorBoardHeatmapLogger(pl.Callback):
 
     @staticmethod
     def _prep_x_for_model(pl_module: pl.LightningModule, x: torch.Tensor) -> torch.Tensor:
-        # Reuse module's helper if present
         if hasattr(pl_module, "_prepare_x"):
             return pl_module._prepare_x(x)  # type: ignore[attr-defined]
-        # Fallback: accept (B, 3*T, H, W)
         return x
 
     @staticmethod
@@ -66,7 +71,6 @@ class TensorBoardHeatmapLogger(pl.Callback):
     def _denorm(
         img_chw: torch.Tensor, mean: list[float] | tuple[float, ...], std: list[float] | tuple[float, ...]
     ) -> torch.Tensor:
-        # img_chw: (3,H,W) normalized; returns [0,1] clamped
         m = torch.tensor(mean, dtype=img_chw.dtype, device=img_chw.device).view(3, 1, 1)
         s = torch.tensor(std, dtype=img_chw.dtype, device=img_chw.device).view(3, 1, 1)
         x = img_chw * s + m
@@ -85,6 +89,56 @@ class TensorBoardHeatmapLogger(pl.Callback):
         # hm: (H, W) in [0,1] -> (3,H,W) grayscale
         return hm.expand(3, *hm.shape[-2:])
 
+    @staticmethod
+    def _peak_xy(hm: torch.Tensor) -> Tuple[int, int]:
+        """
+        hm: (H, W) -> returns (x, y) int pixel coords in heatmap resolution.
+        """
+        H, W = hm.shape[-2], hm.shape[-1]
+        idx = torch.argmax(hm.view(-1)).item()
+        y, x = divmod(idx, W)
+        return int(x), int(y)
+
+    @staticmethod
+    def _scale_xy(x: int, y: int, src_hw: Tuple[int, int], dst_hw: Tuple[int, int]) -> Tuple[int, int]:
+        """
+        Scale (x,y) from src (H,W) to dst (H,W). Nearest-pixel mapping.
+        """
+        srcH, srcW = src_hw
+        dstH, dstW = dst_hw
+        # avoid zero division
+        sx = (dstW - 1) / max(1, srcW - 1)
+        sy = (dstH - 1) / max(1, srcH - 1)
+        return int(round(x * sx)), int(round(y * sy))
+
+    @staticmethod
+    def _draw_filled_circle(
+        img: torch.Tensor, x: int, y: int, color: Tuple[float, float, float], radius: int
+    ) -> torch.Tensor:
+        """
+        Draw a filled circle on img (3,H,W) in-place-like (returns a new tensor sharing storage).
+        color in [0,1]; radius in pixels.
+        """
+        C, H, W = img.shape
+        if radius <= 0:
+            radius = 1
+        x0 = max(0, x - radius)
+        x1 = min(W - 1, x + radius)
+        y0 = max(0, y - radius)
+        y1 = min(H - 1, y + radius)
+        if x0 > x1 or y0 > y1:
+            return img
+
+        yy = torch.arange(y0, y1 + 1, device=img.device).view(-1, 1)
+        xx = torch.arange(x0, x1 + 1, device=img.device).view(1, -1)
+        mask = (xx - x) ** 2 + (yy - y) ** 2 <= radius**2  # (h, w) boolean
+        # blend: simple overwrite toward color
+        for c in range(3):
+            region = img[c, y0 : y1 + 1, x0 : x1 + 1]
+            region = torch.where(mask, torch.tensor(color[c], device=img.device, dtype=img.dtype), region)
+            img[c, y0 : y1 + 1, x0 : x1 + 1] = region
+        return img
+
     @torch.no_grad()
     def _log_batch(self, pl_module: pl.LightningModule, batch: Any, global_step: int, tag_prefix: str):
         logger_tb = getattr(pl_module.logger, "experiment", None)
@@ -93,31 +147,25 @@ class TensorBoardHeatmapLogger(pl.Callback):
             return
 
         x, y_true = self._select_io(batch)
-        # Prepare x for model input
         x_in = self._prep_x_for_model(pl_module, x)
         # Forward
         y_out = pl_module(x_in)
         scale = pl_module.cfg.model.out_scales[0]
         y_pred = y_out[scale]
 
-        # Shapes: y_true (B, 1, H, W), y_pred (B, C, H, W) or (B, 1, H, W)
         # Reduce to single-channel heatmap
-        if y_pred.dim() == 4 and y_pred.size(1) > 1:
-            y_pred_viz = y_pred[:, 0]
-        elif y_pred.dim() == 4:
+        if y_pred.dim() == 4:
             y_pred_viz = y_pred[:, 0]
         else:
             y_pred_viz = y_pred
-
         y_true_viz = y_true[:, 0]
 
-        # Select samples
         B = x.size(0)
         num = min(self.num_samples, B)
-        # decide mean/std for inverse normalization
+
+        # inverse-norm params
         mean = [0.485, 0.456, 0.406]
         std = [0.229, 0.224, 0.225]
-        # allow override from cfg if available
         try:
             if hasattr(pl_module.cfg, "data") and hasattr(pl_module.cfg.data, "normalize"):
                 mean = list(getattr(pl_module.cfg.data.normalize, "mean", mean))
@@ -126,53 +174,42 @@ class TensorBoardHeatmapLogger(pl.Callback):
             pass
 
         for i in range(num):
-            # Choose last frame from input
+            # ---- choose last frame
             if x.dim() == 5:
-                Bx, C, T, H, W = x.shape
+                _, C, T, H, W = x.shape
                 x3t = x[i].reshape(C * T, H, W)
                 frame = self._to_image(x3t, T)
             else:
-                # (B, 3*T, H, W)
                 _, C3T, H, W = x.shape
                 T = C3T // 3
                 frame = self._to_image(x[i], T)
-            # inverse normalize original frame
-            frame_denorm = self._denorm(frame, mean, std)
 
-            hm_pred = self._norm_hm(y_pred_viz[i])
-            hm_true = self._norm_hm(y_true_viz[i])
+            frame_denorm = self._denorm(frame, mean, std)  # (3,Hf,Wf)
+            Hf, Wf = frame_denorm.shape[-2], frame_denorm.shape[-1]
 
-            # Resize heatmap to frame size if needed (for overlays)
-            if hm_pred.shape[-2:] != frame_denorm.shape[-2:]:
-                hm_pred_res = torch.nn.functional.interpolate(
-                    hm_pred.unsqueeze(0).unsqueeze(0),
-                    size=frame_denorm.shape[-2:],
-                    mode="bilinear",
-                    align_corners=False,
-                ).squeeze()
-                hm_true_res = torch.nn.functional.interpolate(
-                    hm_true.unsqueeze(0).unsqueeze(0),
-                    size=frame_denorm.shape[-2:],
-                    mode="bilinear",
-                    align_corners=False,
-                ).squeeze()
-            else:
-                hm_pred_res, hm_true_res = hm_pred, hm_true
+            # ---- normalize heatmaps to [0,1]
+            hm_pred = self._norm_hm(y_pred_viz[i])  # (Hp, Wp)
+            hm_true = self._norm_hm(y_true_viz[i])  # (Hg, Wg)
 
-            # Overlays on inverse-normalized original image
-            if self.log_overlay:
-                # simple colorization: pred in red, gt in green
-                pred_rgb = torch.stack(
-                    [hm_pred_res, torch.zeros_like(hm_pred_res), torch.zeros_like(hm_pred_res)], dim=0
-                )
-                gt_rgb = torch.stack([torch.zeros_like(hm_true_res), hm_true_res, torch.zeros_like(hm_true_res)], dim=0)
-                overlay_pred = (frame_denorm + pred_rgb) / 2.0
-                overlay_gt = (frame_denorm + gt_rgb) / 2.0
-                logger_tb.add_image(f"{tag_prefix}/image/{i}", frame_denorm, global_step)
-                logger_tb.add_image(f"{tag_prefix}/overlay_pred/{i}", overlay_pred.clamp(0, 1), global_step)
-                logger_tb.add_image(f"{tag_prefix}/overlay_gt/{i}", overlay_gt.clamp(0, 1), global_step)
+            # ---- find peaks in heatmap space
+            xp, yp = self._peak_xy(hm_pred)  # in pred map coords
+            xg, yg = self._peak_xy(hm_true)  # in gt map coords
 
-            # Standalone heatmaps (grayscale 3ch)
+            # ---- scale to frame coords
+            Hp, Wp = hm_pred.shape[-2], hm_pred.shape[-1]
+            Hg, Wg = hm_true.shape[-2], hm_true.shape[-1]
+            xp_f, yp_f = self._scale_xy(xp, yp, (Hp, Wp), (Hf, Wf))
+            xg_f, yg_f = self._scale_xy(xg, yg, (Hg, Wg), (Hf, Wf))
+
+            # ---- draw points on the frame
+            frame_pts = frame_denorm.clone()
+            frame_pts = self._draw_filled_circle(frame_pts, xp_f, yp_f, self.pred_color, self.marker_radius)
+            frame_pts = self._draw_filled_circle(frame_pts, xg_f, yg_f, self.gt_color, self.marker_radius)
+
+            # ---- log images
+            logger_tb.add_image(f"{tag_prefix}/frame_points/{i}", frame_pts.clamp(0, 1), global_step)
+
+            # standalone heatmaps (grayscale 3ch), still helpful for debugging
             logger_tb.add_image(f"{tag_prefix}/heatmap_pred/{i}", self._to_grayscale_3ch(hm_pred), global_step)
             logger_tb.add_image(f"{tag_prefix}/heatmap_gt/{i}", self._to_grayscale_3ch(hm_true), global_step)
 

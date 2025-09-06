@@ -3,8 +3,9 @@ from typing import Literal
 
 import hydra
 from omegaconf import DictConfig
+import torch
 
-
+torch.set_float32_matmul_precision("medium")  # or 'high'
 logger = logging.getLogger(__name__)
 
 

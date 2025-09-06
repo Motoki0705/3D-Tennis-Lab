@@ -1,5 +1,15 @@
 tb_image_logger:
-  every_n_steps: 200
+  every_n_steps: 50
   num_samples: 2
   mode: val # train or val
   log_overlay: true
+
+# Use a training metric for checkpointing if validation is unavailable.
+checkpoint:
+  monitor: val/loss
+  mode: min
+  save_top_k: 3
+  filename: "epoch={epoch}-valloss={val/loss:.4f}"
+
+lr_monitor:
+  logging_interval: epoch

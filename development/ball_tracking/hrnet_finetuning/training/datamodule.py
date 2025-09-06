@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
+import random
 
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
@@ -28,15 +29,18 @@ class AugmentationConfig:
 @dataclass
 class DataModuleConfig:
     images_root: str
-    labeled_json_train: str
-    labeled_json_val: str
-    img_size: Tuple[int, int]
-    T: int
-    frame_stride: int
-    output_stride: int
-    sigma_px: float
-    batch_size: int
-    num_workers: int
+    # Single annotation file; DataModule will split into train/val by clip
+    labeled_json: str
+    # Train/val split params when using a single file
+    val_ratio: float = 0.1
+    split_seed: int = 42
+    img_size: Tuple[int, int] = (288, 512)
+    T: int = 3
+    frame_stride: int = 1
+    output_stride: int = 1
+    sigma_px: float = 3.0
+    batch_size: int = 8
+    num_workers: int = 4
     augmentation: AugmentationConfig = field(default_factory=AugmentationConfig)
 
 
@@ -53,7 +57,7 @@ class BallDataModule(pl.LightningDataModule):
         train_transforms = get_train_transforms(height=height, width=width, **self.cfg.augmentation.__dict__)
         val_transforms = get_val_transforms(height=height, width=width)
 
-        data_cfg = {
+        data_base = {
             "images_root": self.cfg.images_root,
             "img_size": self.cfg.img_size,
             "T": self.cfg.T,
@@ -61,12 +65,38 @@ class BallDataModule(pl.LightningDataModule):
             "output_stride": self.cfg.output_stride,
             "sigma_px": self.cfg.sigma_px,
         }
-        data_cfg_train = DataConfig(labeled_json=self.cfg.labeled_json_train, **data_cfg)
-        data_cfg_val = DataConfig(labeled_json=self.cfg.labeled_json_val, **data_cfg)
 
         if stage == "fit" or stage is None:
-            self.train_dataset = BallDataset(data_cfg_train, transforms=train_transforms)
-            self.val_dataset = BallDataset(data_cfg_val, transforms=val_transforms)
+            ann = self.cfg.labeled_json
+
+            # Build a temporary full dataset to obtain clip grouping
+            tmp_ds = BallDataset(DataConfig(labeled_json=ann, **data_base), transforms=None)
+            num_clips = len(tmp_ds.clips)
+            if num_clips < 2:
+                # Fallback: use all clips for train and no val
+                train_idx = list(range(num_clips))
+                val_idx: List[int] = []
+            else:
+                indices = list(range(num_clips))
+                random.Random(int(self.cfg.split_seed)).shuffle(indices)
+                n_val = max(1, int(round(num_clips * float(self.cfg.val_ratio))))
+                n_val = min(n_val, num_clips - 1)  # ensure at least one train clip
+                val_idx = sorted(indices[:n_val])
+                train_idx = sorted(indices[n_val:])
+
+            # Build actual datasets with the same underlying data to avoid re-parsing
+            self.train_dataset = BallDataset(
+                DataConfig(labeled_json=ann, **data_base),
+                transforms=train_transforms,
+                allowed_clip_indices=train_idx,
+                data_override=tmp_ds.data,
+            )
+            self.val_dataset = BallDataset(
+                DataConfig(labeled_json=ann, **data_base),
+                transforms=val_transforms,
+                allowed_clip_indices=val_idx,
+                data_override=tmp_ds.data,
+            )
 
     def train_dataloader(self):
         if self.train_dataset is None:

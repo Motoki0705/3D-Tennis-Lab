@@ -37,10 +37,18 @@ def downscale_coord(x: float, y: float, stride: int) -> Tuple[float, float]:
 class BallDataset(Dataset):
     """Sequence dataset for ball heatmap training."""
 
-    def __init__(self, cfg: DataConfig, transforms: Optional[Callable] = None):
+    def __init__(
+        self,
+        cfg: DataConfig,
+        transforms: Optional[Callable] = None,
+        *,
+        allowed_clip_indices: Optional[List[int]] = None,
+        data_override: Optional[Dict[str, Any]] = None,
+    ):
         self.cfg = cfg
         self.transforms = transforms
-        self.data = self._load_json(cfg.labeled_json)
+        # Allow injecting preloaded/filtered data to avoid IO and enable splitting
+        self.data = data_override if data_override is not None else self._load_json(cfg.labeled_json)
 
         images_map: Dict[int, Dict[str, Any]] = {im["id"]: dict(im) for im in self.data.get("images", [])}
         ball_cat_id = self._get_ball_category_id(self.data)
@@ -56,7 +64,11 @@ class BallDataset(Dataset):
                 if xyv is not None:
                     images_map[img_id]["keypoints"] = [xyv[0], xyv[1]]
 
-        self.clips = self._group_clips({"images": list(images_map.values())})
+        clips_all = self._group_clips({"images": list(images_map.values())})
+        if allowed_clip_indices is not None:
+            self.clips = [clips_all[i] for i in allowed_clip_indices if 0 <= i < len(clips_all)]
+        else:
+            self.clips = clips_all
 
         self.samples = []
         for clip_idx, clip in enumerate(self.clips):
@@ -121,6 +133,15 @@ class BallDataset(Dataset):
             transformed_kps.append(first_frame_data["keypoints"])
             if len(images_np) > 1:
                 replay = first_frame_data.get("replay")
+                # Sanitize replay to avoid Albumentations warnings with PadIfNeeded('padding') on some versions
+                if isinstance(replay, dict):
+                    try:
+                        for t in replay.get("transforms", []):
+                            args = t.get("args", {})
+                            if isinstance(args, dict) and "padding" in args:
+                                args.pop("padding", None)
+                    except Exception:
+                        pass
                 for i in range(1, len(images_np)):
                     data = (
                         A.ReplayCompose.replay(replay, image=images_np[i], keypoints=keypoints_per_frame[i])
