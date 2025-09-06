@@ -219,8 +219,6 @@ class TensorBoardHeatmapLogger(pl.Callback):
     ) -> None:
         if self.mode != "train":
             return
-        if trainer.global_step % self.every_n_steps != 0:
-            return
         self._log_batch(pl_module, batch, trainer.global_step, tag_prefix="train")
 
     def on_validation_batch_end(
@@ -233,8 +231,6 @@ class TensorBoardHeatmapLogger(pl.Callback):
         dataloader_idx: int = 0,
     ) -> None:
         if self.mode != "val":
-            return
-        if trainer.global_step % self.every_n_steps != 0:
             return
         self._log_batch(pl_module, batch, trainer.global_step, tag_prefix="val")
 

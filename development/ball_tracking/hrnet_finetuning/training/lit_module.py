@@ -65,7 +65,16 @@ class HRNetFinetuneLitModule(pl.LightningModule):
     # ------------------------
     def load_external_checkpoint(self, ckpt_path: str, strict: bool = False):
         path = abspath(ckpt_path)
-        obj = torch.load(path, map_location="cpu")
+        try:
+            from ..utils.checkpoint import load_checkpoint_object
+
+            obj = load_checkpoint_object(path)
+        except Exception:
+            # Fallback to torch.load with permissive behavior
+            try:
+                obj = torch.load(path, map_location="cpu", weights_only=False)  # type: ignore[call-arg]
+            except TypeError:
+                obj = torch.load(path, map_location="cpu")
         state_dict: Dict[str, torch.Tensor]
         if isinstance(obj, dict):
             for k in ["state_dict", "model_state_dict", "model_state", "model", "weights"]:

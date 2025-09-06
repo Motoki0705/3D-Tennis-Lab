@@ -19,7 +19,30 @@ def load_checkpoint_object(path: str) -> Any:
         abs_path = os.path.abspath(path)
     if not os.path.exists(abs_path):
         raise FileNotFoundError(f"Checkpoint not found: {abs_path}")
-    return torch.load(abs_path, map_location="cpu")
+    # PyTorch 2.6+: torch.load defaults to weights_only=True and blocks untrusted globals.
+    # We try safe loading first, then fall back to legacy behavior if needed.
+    # 1) Try weights_only=True with allowlisted safe globals (OmegaConf types commonly present in ckpts)
+    try:
+        from omegaconf.dictconfig import DictConfig  # type: ignore
+        from omegaconf.listconfig import ListConfig  # type: ignore
+
+        safe = [DictConfig, ListConfig]
+    except Exception:
+        safe = []
+
+    # Attempt weights-only safe load if supported by this torch version
+    try:
+        if hasattr(torch.serialization, "safe_globals"):
+            with torch.serialization.safe_globals(safe):
+                return torch.load(abs_path, map_location="cpu", weights_only=True)
+        # If context manager not available, still try weights_only
+        return torch.load(abs_path, map_location="cpu", weights_only=True)  # type: ignore[call-arg]
+    except TypeError:
+        # Older torch without weights_only argument
+        return torch.load(abs_path, map_location="cpu")
+    except Exception:
+        # 2) As a last resort, allow full unpickling (only for trusted checkpoints)
+        return torch.load(abs_path, map_location="cpu", weights_only=False)  # type: ignore[call-arg]
 
 
 def extract_state_dict(ckpt_obj: Any) -> Tuple[Dict[str, torch.Tensor], Dict[str, Any]]:

@@ -33,6 +33,15 @@ class InferRunner(BaseRunner):
         if unexpected:
             print(f"[warn] unexpected keys: {unexpected}")
 
+        # Align model dtype with requested inference dtype (after loading weights)
+        dt = self.dtype.lower()
+        if dt in ("float16", "fp16", "half"):
+            self.model = self.model.half()
+        elif dt in ("float64", "fp64", "double"):
+            self.model = self.model.double()
+        else:
+            self.model = self.model.float()
+
     @staticmethod
     def _to_tensor(frames: np.ndarray, mean, std, dtype="float32") -> torch.Tensor:
         # frames: (T, H, W, 3) -> (3T, H, W)
@@ -41,8 +50,13 @@ class InferRunner(BaseRunner):
         frames_f = (frames_f - np.array(mean).reshape(1, 1, 1, 3)) / np.array(std).reshape(1, 1, 1, 3)
         frames_chw = np.transpose(frames_f, (0, 3, 1, 2)).reshape(T * 3, H, W)
         t = torch.from_numpy(frames_chw)
-        if dtype == "float16":
+        dt = str(dtype).lower()
+        if dt in ("float16", "fp16", "half"):
             t = t.half()
+        elif dt in ("float64", "fp64", "double"):
+            t = t.double()
+        else:
+            t = t.float()
         return t
 
     @staticmethod
@@ -100,6 +114,26 @@ class InferRunner(BaseRunner):
         stride = int(cfg.infer.stride)
         out_idx = 0
 
+        # Progress bar over frames
+        try:
+            from tqdm import tqdm  # type: ignore
+
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            pbar = tqdm(total=total_frames if total_frames > 0 else None, desc="Inferring frames", unit="frm")
+        except Exception:
+
+            class _NoTQDM:
+                def update(self, n=1):
+                    pass
+
+                def close(self):
+                    pass
+
+                def set_postfix(self, **kwargs):
+                    pass
+
+            pbar = _NoTQDM()
+
         while True:
             ok, frame = cap.read()
             if not ok:
@@ -107,6 +141,7 @@ class InferRunner(BaseRunner):
             frame = self._resize_frame(frame, (self.input_h, self.input_w))
             window.append(frame)
             if len(window) < self.frames_in:
+                pbar.update(1)
                 continue
 
             batch = self._to_tensor(np.stack(window[-self.frames_in :], axis=0), self.mean, self.std, self.dtype)
@@ -126,16 +161,25 @@ class InferRunner(BaseRunner):
                     os.path.join(abspath(cfg.infer.save_heatmaps_dir), f"{out_idx:06d}.npy"), hm.detach().cpu().numpy()
                 )
             out_idx += 1
+            try:
+                pbar.set_postfix(outputs=out_idx)
+            except Exception:
+                pass
 
             # slide window
             if stride >= self.frames_in:
                 window = []
             else:
                 window = window[stride:]
+            pbar.update(1)
 
         cap.release()
         if out_writer is not None:
             out_writer.release()
+        try:
+            pbar.close()
+        except Exception:
+            pass
         print("Inference done.")
 
 
