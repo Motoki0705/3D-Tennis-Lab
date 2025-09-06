@@ -24,14 +24,10 @@ class InferRunner(BaseRunner):
 
         self.model = HRNet3DStem(cfg.model).to(self.device).eval()
 
-        # Load checkpoint
-        ckpt = torch.load(abspath(cfg.infer.checkpoint), map_location="cpu")
-        state_dict = self._load_state_dict(ckpt)
-        cleaned = {}
-        for k, v in state_dict.items():
-            nk = k[len("model.") :] if k.startswith("model.") else k
-            cleaned[nk] = v
-        missing, unexpected = self.model.load_state_dict(cleaned, strict=False)
+        # Load checkpoint (.pth/.pth.tar/.ckpt supported)
+        from ..utils import load_model_weights
+
+        missing, unexpected = load_model_weights(self.model, abspath(cfg.infer.checkpoint), strict=False)
         if missing:
             print(f"[warn] missing keys: {missing}")
         if unexpected:

@@ -1,7 +1,7 @@
 video_path: "data/sample_videos/input.mp4"
 output_video: "outputs/hrnet_infer/output.mp4"
 save_heatmaps_dir: null # e.g., "outputs/hrnet_infer/heatmaps"
-checkpoint: "development/ball_tracking/hrnet_finetuning/weight/wasb_tennis_best_3dstem.pth.tar"
+checkpoint: "development/ball_tracking/hrnet_finetuning/weight/wasb_tennis_best_3dstem.pth.tar" # supports .pth/.pth.tar/.ckpt
 input_size: [288, 512] # H, W for resizing frames
 batch_size: 4
 stride: 1 # window stride over frames
