@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Tuple, Optional
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -12,16 +12,19 @@ from hydra.utils import to_absolute_path as abspath
 
 class InferRunner(BaseRunner):
     """
-    Inference runner for HRNet3DStem-based ball heatmap → point estimation.
+    Inference runner for HRNet3DStem-based ball heatmap inference.
 
-    Tracker can be toggled via config:
+    Modes (cfg.infer.render.mode):
+      - "heatmap"        : write a heatmap-only video (colorized heatmap frames)
+      - "detect_and_draw": parse heatmap to (x,y) and draw on original frames
+                           (optional tracker + optional overlay_heatmap)
+
+    Tracker toggle:
       - Preferred: cfg.infer.tracker.enable: bool
-      - Legacy fallback: cfg.infer.use_tracker: bool
+      - Legacy:    cfg.infer.use_tracker: bool
 
-    Other tracker params (prefer nested):
-      - cfg.infer.tracker.tail          (fallback: cfg.infer.track_tail)
-      - cfg.infer.tracker.hm_threshold  (fallback: cfg.infer.hm_threshold)
-      - cfg.infer.tracker.max_missed    (fallback: cfg.infer.track_max_missed)
+    Tracker params (prefer nested cfg.infer.tracker.* with fallback to top-level):
+      - tail, hm_threshold, max_missed
     """
 
     def __init__(self, cfg):
@@ -32,12 +35,18 @@ class InferRunner(BaseRunner):
         self.std = cfg.infer.normalize.std
         self.dtype = str(cfg.infer.dtype)
 
+        # --- Render mode ---
+        r_cfg = getattr(cfg.infer, "render", None)
+        self.render_mode: str = str(getattr(r_cfg, "mode", "detect_and_draw")) if r_cfg else "detect_and_draw"
+        self.hm_colormap: str = str(getattr(r_cfg, "colormap", "JET")) if r_cfg else "JET"
+        self.hm_blend_alpha: float = float(getattr(r_cfg, "blend_alpha", 0.4)) if r_cfg else 0.4
+
         # Build model
         from ..model.base_hrnet_3dstem import HRNet3DStem
 
         self.model = HRNet3DStem(cfg.model).to(self.device).eval()
 
-        # Load checkpoint (.pth/.pth.tar/.ckpt supported)
+        # Load checkpoint
         from ..utils import load_model_weights
 
         missing, unexpected = load_model_weights(self.model, abspath(cfg.infer.checkpoint), strict=False)
@@ -46,7 +55,7 @@ class InferRunner(BaseRunner):
         if unexpected:
             print(f"[warn] unexpected keys: {unexpected}")
 
-        # Align model dtype with requested inference dtype (after loading weights)
+        # Align model dtype with requested inference dtype
         dt = self.dtype.lower()
         if dt in ("float16", "fp16", "half"):
             self.model = self.model.half()
@@ -57,13 +66,11 @@ class InferRunner(BaseRunner):
 
         # --- Tracker config (nested preferred; top-level kept for backward compat) ---
         tr_cfg = getattr(cfg.infer, "tracker", None)
-        # enable flag: prefer tracker.enable, fallback to infer.use_tracker, default True
         self.use_tracker: bool = bool(
             getattr(tr_cfg, "enable", getattr(cfg.infer, "use_tracker", True))
             if tr_cfg is not None
             else getattr(cfg.infer, "use_tracker", True)
         )
-        # parameters (prefer nested)
         self.track_tail: int = int(
             getattr(tr_cfg, "tail", getattr(cfg.infer, "track_tail", 30))
             if tr_cfg
@@ -80,11 +87,12 @@ class InferRunner(BaseRunner):
             else getattr(cfg.infer, "track_max_missed", 30)
         )
 
-        # Drawing / overlay
+        # Drawing / overlay (used in detect_and_draw)
         self.overlay_heatmap: bool = bool(getattr(cfg.infer, "overlay_heatmap", False))
         self.draw_radius: int = int(getattr(cfg.infer, "draw_radius", 5))
         self.draw_thickness: int = int(getattr(cfg.infer, "draw_thickness", 2))
 
+    # ---------- I/O utils ----------
     @staticmethod
     def _to_tensor(frames: np.ndarray, mean, std, dtype="float32") -> torch.Tensor:
         # frames: (T, H, W, 3) -> (3T, H, W)
@@ -108,7 +116,7 @@ class InferRunner(BaseRunner):
         try:
             import cv2
         except Exception as e:
-            raise SystemExit("OpenCV (cv2) が必要です。'pip install opencv-python' でインストールしてください。") from e
+            raise SystemExit("OpenCV (cv2) is required. Install with 'pip install opencv-python'.") from e
         return cv2.resize(frame, (W, H), interpolation=cv2.INTER_LINEAR)
 
     @staticmethod
@@ -116,7 +124,7 @@ class InferRunner(BaseRunner):
         try:
             import cv2
         except Exception as e:
-            raise SystemExit("OpenCV (cv2) が必要です。'pip install opencv-python' でインストールしてください。") from e
+            raise SystemExit("OpenCV (cv2) is required. Install with 'pip install opencv-python'.") from e
         cap = cv2.VideoCapture(path)
         if not cap.isOpened():
             raise FileNotFoundError(f"Failed to open video: {path}")
@@ -129,68 +137,24 @@ class InferRunner(BaseRunner):
         H, W = size_hw
         return cv2.VideoWriter(out_path, fourcc, fps, (W, H))
 
+    # ---------- Visualization helpers ----------
     @staticmethod
-    def _overlay_heatmap(cv2, frame_bgr: np.ndarray, heatmap: np.ndarray) -> np.ndarray:
+    def _colorize_heatmap(cv2, heatmap: np.ndarray, colormap_name: str = "JET") -> np.ndarray:
         hm = heatmap
         if isinstance(hm, torch.Tensor):
             hm = hm.detach().cpu().float().numpy()
-        hm = hm - hm.min()
-        if hm.max() > 0:
-            hm = hm / hm.max()
+        hm = hm - float(hm.min())
+        mx = float(hm.max())
+        if mx > 0:
+            hm = hm / mx
         hm_u8 = (hm * 255.0).astype(np.uint8)
-        color = cv2.applyColorMap(hm_u8, cv2.COLORMAP_JET)
-        blended = cv2.addWeighted(frame_bgr, 0.6, color, 0.4, 0)
-        return blended
+        cmap = getattr(cv2, f"COLORMAP_{colormap_name.upper()}", cv2.COLORMAP_JET)
+        return cv2.applyColorMap(hm_u8, cmap)
 
-    @staticmethod
-    def _heatmap_to_point(
-        hm: np.ndarray, frame_size_hw: Tuple[int, int]
-    ) -> Tuple[Optional[Tuple[float, float]], float]:
-        """
-        Convert heatmap to pixel coordinates (x, y) in the resized frame.
-
-        Returns (point or None, confidence[0..1]). Confidence is derived from
-        normalized heatmap peak value.
-        """
-        if isinstance(hm, torch.Tensor):
-            hm_np = hm.detach().cpu().float().numpy()
-        else:
-            hm_np = np.asarray(hm, dtype=np.float32)
-        if hm_np.ndim == 3:
-            # Heuristic: use last channel or max over channels
-            hm_np = hm_np[-1] if hm_np.shape[0] > 1 else hm_np[0]
-
-        # Normalize 0..1 for a relative confidence
-        mmin = float(hm_np.min())
-        hm_norm = hm_np - mmin
-        mmax = float(hm_norm.max())
-        if mmax > 0:
-            hm_norm = hm_norm / mmax
-        else:
-            return None, 0.0
-
-        # Peak
-        idx = np.argmax(hm_norm)
-        py_hm, px_hm = np.unravel_index(int(idx), hm_norm.shape)  # row, col (y, x)
-        conf = float(hm_norm[py_hm, px_hm])
-
-        # Subpixel refinement using local weighted centroid (3x3 window)
-        y0, y1 = max(py_hm - 1, 0), min(py_hm + 2, hm_norm.shape[0])
-        x0, x1 = max(px_hm - 1, 0), min(px_hm + 2, hm_norm.shape[1])
-        patch = hm_norm[y0:y1, x0:x1]
-        if patch.size > 0 and float(patch.sum()) > 0.0:
-            ys, xs = np.mgrid[y0:y1, x0:x1]
-            py_hm_ref = float((ys * patch).sum() / patch.sum())
-            px_hm_ref = float((xs * patch).sum() / patch.sum())
-        else:
-            py_hm_ref, px_hm_ref = float(py_hm), float(px_hm)
-
-        Hf, Wf = frame_size_hw
-        Hy, Wx = hm_norm.shape[0], hm_norm.shape[1]
-        sx, sy = float(Wf) / float(Wx), float(Hf) / float(Hy)
-        px = px_hm_ref * sx
-        py = py_hm_ref * sy
-        return (px, py), conf
+    def _overlay_heatmap(self, cv2, frame_bgr: np.ndarray, heatmap: np.ndarray) -> np.ndarray:
+        color = self._colorize_heatmap(cv2, heatmap, self.hm_colormap)
+        alpha = float(self.hm_blend_alpha)
+        return cv2.addWeighted(frame_bgr, 1.0 - alpha, color, alpha, 0)
 
     @staticmethod
     def _draw_tracking(
@@ -202,13 +166,11 @@ class InferRunner(BaseRunner):
         thickness: int = 2,
     ) -> np.ndarray:
         img = frame_bgr.copy()
-        # Draw trail as fading line segments
         n = len(trail_xy)
         if n >= 2:
             for i in range(1, n):
                 a = trail_xy[i - 1]
                 b = trail_xy[i]
-                # Fade color older->newer (light blue -> yellow)
                 t = i / (n - 1 + 1e-6)
                 color = (
                     int(255 * (1.0 - t)),  # B
@@ -216,12 +178,11 @@ class InferRunner(BaseRunner):
                     int(50 + 205 * t),  # R
                 )
                 cv2.line(img, (int(a[0]), int(a[1])), (int(b[0]), int(b[1])), color, thickness)
-
-        # Draw current point
         cv2.circle(img, (int(cur_xy[0]), int(cur_xy[1])), radius, (0, 0, 255), -1)
         cv2.circle(img, (int(cur_xy[0]), int(cur_xy[1])), max(1, radius + 2), (255, 255, 255), 1)
         return img
 
+    # ---------- Main loop ----------
     def run(self):
         cfg = self.cfg
         cap, cv2 = self._open_video(abspath(cfg.infer.video_path))
@@ -230,11 +191,11 @@ class InferRunner(BaseRunner):
         if cfg.infer.output_video:
             out_writer = self._init_writer(cv2, abspath(cfg.infer.output_video), fps, (self.input_h, self.input_w))
 
-        # Build tracker (optional)
+        # Optional tracker
         tracker = None
         simple_trail: list[Tuple[float, float]] = []
         missed_simple = 0
-        if self.use_tracker:
+        if self.render_mode == "detect_and_draw" and self.use_tracker:
             from ..tracker import BallTracker
 
             tracker = BallTracker(
@@ -244,6 +205,9 @@ class InferRunner(BaseRunner):
                 max_missed=self.track_max_missed,
             )
 
+        # Heatmap analyzer module (separate file)
+        from ..analysis.heatmap_analysis import HeatmapAnalyzer
+
         if cfg.infer.save_heatmaps_dir:
             os.makedirs(abspath(cfg.infer.save_heatmaps_dir), exist_ok=True)
 
@@ -251,7 +215,7 @@ class InferRunner(BaseRunner):
         stride = int(cfg.infer.stride)
         out_idx = 0
 
-        # Progress bar over frames
+        # Progress bar
         try:
             from tqdm import tqdm  # type: ignore
 
@@ -275,6 +239,7 @@ class InferRunner(BaseRunner):
             ok, frame = cap.read()
             if not ok:
                 break
+
             frame = self._resize_frame(frame, (self.input_h, self.input_w))
             window.append(frame)
             if len(window) < self.frames_in:
@@ -286,75 +251,92 @@ class InferRunner(BaseRunner):
             with torch.no_grad():
                 y_out = self.model(x)
 
-            # Assume dict of scale -> tensor list; take the first output scale
+            # Assume dict of scale -> tensor list; take the first declared output scale
             scale = cfg.model.out_scales[0]
             y = y_out[scale][0]
+            # (C,H,W) or (H,W)
             hm = y[-1] if (y.ndim == 3 and y.shape[0] > 1) else (y[0] if y.ndim == 3 else y.squeeze(0))
 
-            # Measurement from heatmap
-            meas_xy, conf = self._heatmap_to_point(hm, (self.input_h, self.input_w))
+            # ----- Mode: HEATMAP-ONLY -----
+            if self.render_mode == "heatmap":
+                disp = self._colorize_heatmap(cv2, hm, self.hm_colormap)
 
-            if tracker is not None:
-                est_xy = tracker.update(meas_xy, conf)
-                trail = tracker.get_trail(self.track_tail)
-                missed_to_show = tracker.missed
+                if out_writer is not None:
+                    out_writer.write(disp)
+
+                if cfg.infer.save_heatmaps_dir:
+                    np.save(
+                        os.path.join(abspath(cfg.infer.save_heatmaps_dir), f"{out_idx:06d}.npy"),
+                        hm.detach().cpu().numpy() if isinstance(hm, torch.Tensor) else np.asarray(hm),
+                    )
+                out_idx += 1
+                try:
+                    pbar.set_postfix(outputs=out_idx)
+                except Exception:
+                    pass
+
+            # ----- Mode: DETECT & DRAW -----
             else:
-                # No tracker: pass-through measurement and keep a simple visualization trail
-                if (meas_xy is not None) and (conf >= self.hm_threshold):
-                    simple_trail.append(meas_xy)
-                    if len(simple_trail) > self.track_tail:
-                        simple_trail = simple_trail[-self.track_tail :]
-                    est_xy = meas_xy
-                    missed_simple = 0
-                else:
-                    # If no confident detection, keep previous estimate but count as missed
-                    missed_simple += 1
-                    est_xy = simple_trail[-1] if simple_trail else (self.input_w * 0.5, self.input_h * 0.5)
-                trail = simple_trail
-                missed_to_show = missed_simple
-
-            # Compose output frame
-            if self.overlay_heatmap:
-                disp = self._overlay_heatmap(cv2, frame, hm)
-            else:
-                disp = frame
-
-            disp = self._draw_tracking(
-                cv2,
-                disp,
-                trail,
-                est_xy,
-                radius=self.draw_radius,
-                thickness=self.draw_thickness,
-            )
-
-            # Optional: draw debug text
-            cv2.putText(
-                disp,
-                f"conf={conf:.2f} missed={missed_to_show}{' (trk)' if self.use_tracker else ' (no-trk)'}",
-                (10, 25),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (255, 255, 255),
-                2,
-                cv2.LINE_AA,
-            )
-
-            if out_writer is not None:
-                out_writer.write(disp)
-
-            if cfg.infer.save_heatmaps_dir:
-                np.save(
-                    os.path.join(abspath(cfg.infer.save_heatmaps_dir), f"{out_idx:06d}.npy"),
-                    hm.detach().cpu().numpy(),
+                # Parse heatmap to a point using the external analyzer
+                meas_xy, conf = HeatmapAnalyzer.to_point(
+                    hm, (self.input_h, self.input_w), strategy="peak+centroid", channel="auto"
                 )
-            out_idx += 1
-            try:
-                pbar.set_postfix(outputs=out_idx)
-            except Exception:
-                pass
 
-            # slide window
+                if tracker is not None:
+                    est_xy = tracker.update(meas_xy, conf)
+                    trail = tracker.get_trail(self.track_tail)
+                    missed_to_show = tracker.missed
+                else:
+                    # Simple visualization trail w/o tracker
+                    if (meas_xy is not None) and (conf >= self.hm_threshold):
+                        simple_trail.append(meas_xy)
+                        if len(simple_trail) > self.track_tail:
+                            simple_trail = simple_trail[-self.track_tail :]
+                        est_xy = meas_xy
+                        missed_simple = 0
+                    else:
+                        missed_simple += 1
+                        est_xy = simple_trail[-1] if simple_trail else (self.input_w * 0.5, self.input_h * 0.5)
+                    trail = simple_trail
+                    missed_to_show = missed_simple
+
+                # Compose output frame
+                if self.overlay_heatmap:
+                    disp = self._overlay_heatmap(cv2, frame, hm)
+                else:
+                    disp = frame
+
+                disp = self._draw_tracking(
+                    cv2, disp, trail, est_xy, radius=self.draw_radius, thickness=self.draw_thickness
+                )
+
+                # OSD
+                cv2.putText(
+                    disp,
+                    f"conf={conf:.2f} missed={missed_to_show}{' (trk)' if (self.render_mode == 'detect_and_draw' and self.use_tracker) else ' (no-trk)'}",
+                    (10, 25),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 255, 255),
+                    2,
+                    cv2.LINE_AA,
+                )
+
+                if out_writer is not None:
+                    out_writer.write(disp)
+
+                if cfg.infer.save_heatmaps_dir:
+                    np.save(
+                        os.path.join(abspath(cfg.infer.save_heatmaps_dir), f"{out_idx:06d}.npy"),
+                        hm.detach().cpu().numpy() if isinstance(hm, torch.Tensor) else np.asarray(hm),
+                    )
+                out_idx += 1
+                try:
+                    pbar.set_postfix(outputs=out_idx)
+                except Exception:
+                    pass
+
+            # Slide window
             if stride >= self.frames_in:
                 window = []
             else:
