@@ -1,9 +1,9 @@
 video_path: "data/samples/clip.mp4"
-output_video: "outputs/hrnet_infer/output.mp4"
+output_video: "outputs/hrnet_infer/output_track.mp4"
 save_heatmaps_dir: null # e.g., "outputs/hrnet_infer/heatmaps"
-checkpoint: "tb_logs/hrnet_finetune/version_9/checkpoints/epoch=epoch=4-valloss=val/loss=0.0020.ckpt" # supports .pth/.pth.tar/.ckpt
+checkpoint: "tb_logs/hrnet_finetune/version_12/checkpoints/epoch=epoch=29-valloss=val/loss=0.0001.ckpt" # supports .pth/.pth.tar/.ckpt
 input_size: [288, 512] # H, W for resizing frames
-batch_size: 4
+batch_size: 8
 stride: 1 # window stride over frames
 normalize:
   mean: [0.485, 0.456, 0.406]

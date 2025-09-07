@@ -5,6 +5,7 @@ from typing import Any, Dict, Tuple
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 import pytorch_lightning as pl
 from hydra.utils import to_absolute_path as abspath
@@ -45,10 +46,39 @@ class HRNetFinetuneLitModule(pl.LightningModule):
         # Build model
         self.model = HRNet3DStem(self.cfg.model)
 
-        # Loss
-        loss_name = str(getattr(self.cfg.training, "loss", {}).get("name", "mse")).lower()
+        # Loss selection: mse | focal | kl
+        # cfg.training.loss can be a dict-like (OmegaConf) with fields:
+        #   name: "mse" | "focal" | "kl"
+        #   gamma: float (for focal)
+        #   tau: float (for kl)
+        #   eps: float (numeric stability)
+        loss_cfg = getattr(self.cfg.training, "loss", {})
+
+        def _get(cfg_obj, key: str, default):
+            try:
+                # OmegaConf/DotDict style
+                if hasattr(cfg_obj, key):
+                    v = getattr(cfg_obj, key)
+                    return default if v is None else v
+            except Exception:
+                pass
+            try:
+                if isinstance(cfg_obj, dict):
+                    return cfg_obj.get(key, default)
+            except Exception:
+                pass
+            return default
+
+        loss_name = str(_get(loss_cfg, "name", "mse")).lower()
+        self.loss_kind = loss_name
+        self.focal_gamma = float(_get(loss_cfg, "gamma", 2.0))
+        self.kl_tau = float(_get(loss_cfg, "tau", 1.0))
+        self.loss_eps = float(_get(loss_cfg, "eps", 1e-6))
         if loss_name == "mse":
             self.criterion = nn.MSELoss()
+        elif loss_name in ("focal", "kl", "kld", "kl_div"):
+            # Use _compute_loss for these kinds
+            self.criterion = None  # type: ignore[assignment]
         else:
             raise ValueError(f"Unsupported loss: {loss_name}")
 
@@ -137,7 +167,7 @@ class HRNetFinetuneLitModule(pl.LightningModule):
         x = self._prepare_x(x)
         y_out = self(x)
         y_hat = self._select_output(y_out)
-        loss = self.criterion(y_hat, y_true)
+        loss = self._loss(y_hat, y_true)
         self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
@@ -146,7 +176,7 @@ class HRNetFinetuneLitModule(pl.LightningModule):
         x = self._prepare_x(x)
         y_out = self(x)
         y_hat = self._select_output(y_out)
-        loss = self.criterion(y_hat, y_true)
+        loss = self._loss(y_hat, y_true)
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         return loss
 
@@ -203,6 +233,41 @@ class HRNetFinetuneLitModule(pl.LightningModule):
             return x
         else:
             raise ValueError(f"Unsupported input shape: {tuple(x.shape)}")
+
+    # ------------------------
+    # Loss impls
+    # ------------------------
+    def _loss(self, y_hat: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
+        if self.loss_kind == "mse":
+            # Standard MSE
+            assert self.criterion is not None
+            return self.criterion(y_hat, y_true)
+
+        if self.loss_kind == "focal":
+            # Binary focal loss on heatmap with soft targets
+            eps = self.loss_eps
+            gamma = self.focal_gamma
+            p = torch.sigmoid(y_hat)
+            t = y_true.clamp(0.0, 1.0).to(p.dtype)
+            # Compute per-pixel focal loss
+            loss_pos = -(t * ((1 - p).clamp_min(eps) ** gamma) * torch.log(p.clamp_min(eps)))
+            loss_neg = -((1 - t) * (p.clamp_min(eps) ** gamma) * torch.log((1 - p).clamp_min(eps)))
+            loss = loss_pos + loss_neg
+            return loss.mean()
+
+        if self.loss_kind in ("kl", "kld", "kl_div"):
+            # KL divergence between spatial distributions of pred and target
+            eps = max(self.loss_eps, 1e-8)
+            tau = max(self.kl_tau, eps)
+            B = y_hat.shape[0]
+            p = (y_hat.view(B, -1) / tau).to(torch.float32)
+            q = (y_true.view(B, -1) / tau).to(torch.float32)
+            logp = F.log_softmax(p, dim=-1)
+            q = F.softmax(q, dim=-1)
+            # batchmean: sum over dims, mean over batch
+            return F.kl_div(logp, q, reduction="batchmean")
+
+        raise AssertionError(f"Unknown loss kind set: {self.loss_kind}")
 
 
 __all__ = ["HRNetFinetuneLitModule"]
