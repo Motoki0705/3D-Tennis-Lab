@@ -1,0 +1,10 @@
+name: wgan_gp
+enable: true
+d_steps: 5
+lambda_gp: 10.0
+lambda_adv: 0.05
+disc:
+  type: tcn
+  channels: [64, 128, 128]
+  kernel_size: 3
+  dropout: 0.1

@@ -1,0 +1,11 @@
+name: selftrain
+enable: true
+teacher: frozen
+teacher_ckpt: checkpoints/supervised_student.ckpt
+pseudo:
+  target: soft
+  q_weights: { peak: 0.5, entropy: 0.2, physics: 0.3, disc: 0.0 }
+  tau_start: 0.3
+  tau_end: 0.7
+  warmup_epochs: 10
+consistency_weight: 0.0

@@ -1,0 +1,21 @@
+# Core losses
+lambda_hm: 1.0
+lambda_speed: 0.1
+lambda_vis: 0.01
+
+# Time-series regularization
+lambda_v: 0.01
+lambda_a: 0.01
+lambda_rank: 0.01
+
+# Confidence / Sharpening
+lambda_sharp: 0.01
+lambda_peak: 0.01
+
+# Heatmap loss selection: one of [mse, focal, kl]
+hm_type: focal
+focal_gamma: 2.0
+kl_tau: 1.0
+
+# Detection accuracy threshold (pixels)
+acc_threshold_px: 8.0

@@ -1,0 +1,10 @@
+name: mean_teacher
+enable: true
+teacher: ema
+pseudo:
+  target: soft
+  q_weights: { peak: 0.3, entropy: 0.3, physics: 0.4, disc: 0.0 }
+  tau_start: 0.2
+  tau_end: 0.6
+  warmup_epochs: 5
+consistency_weight: 0.5
