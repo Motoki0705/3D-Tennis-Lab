@@ -42,7 +42,9 @@ class CourtKeypointDataset(Dataset):
         self.transform = transform
         self.num_keypoints = int(num_keypoints) if num_keypoints is not None else 15
 
-        with open(annotation_file) as f:
+        # Hydra may change the working directory per run; make annotation path absolute
+        ann_path = to_absolute_path(str(annotation_file))
+        with open(ann_path) as f:
             coco_data = json.load(f)
 
         self.image_info = {img["id"]: img for img in coco_data["images"]}
