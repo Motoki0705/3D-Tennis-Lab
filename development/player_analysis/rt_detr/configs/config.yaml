@@ -1,0 +1,27 @@
+defaults:
+  - model: rtdetr
+  - callbacks: default
+  - data: player_detection
+  - _self_
+
+task: train # train | infer (infer is not implemented)
+
+seed: 42
+device: auto # cpu | cuda | auto
+
+experiment_name: rt_detr_finetune
+
+training:
+  max_epochs: 50
+  accelerator: auto
+  devices: 1
+  precision: 16-mixed
+  lr: 2e-4
+  weight_decay: 1e-4
+  warmup_epochs: 1
+  eta_min: 1e-6
+  betas: [0.9, 0.999]
+  log_each_loss: true
+
+validation:
+  enable_map: true

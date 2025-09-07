@@ -1,0 +1,2 @@
+hf_checkpoint: "PekingU/rtdetr_r50vd"
+num_classes: 1
