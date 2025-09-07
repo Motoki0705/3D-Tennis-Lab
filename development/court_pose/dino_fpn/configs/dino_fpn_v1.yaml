@@ -1,0 +1,43 @@
+model:
+  backbone_name: "dinov3_vitb16" # use local ViT-S/16 by default
+  weights_path: "third_party/dinov3/checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
+  decoder_channels: [256, 128, 64, 32]
+  heatmap_channels: 15
+
+dataset:
+  img_dir: "data/processed/court/images/"
+  annotation_file: "data/processed/court/annotation_pruned.json"
+  img_size: [360, 640]
+  heatmap_size: [360, 640]
+  heatmap_sigma: 3.0
+  batch_size: 32
+  num_workers: 0
+  train_ratio: 0.8
+  val_ratio: 0.1
+  pin_memory: false
+  persistent_workers: false
+
+training:
+  max_epochs: 100
+  lr: 1e-4
+  backbone_lr: 0.0
+  weight_decay: 1e-5
+  precision: 16-mixed
+  accelerator: gpu
+  devices: 1
+  loss:
+    name: "mse" # mse | bce | focal | kldiv (see development/utils/loss)
+    params: {}
+  freeze_backbone: true
+
+callbacks:
+  checkpoint:
+    monitor: "val/loss"
+    mode: min
+    save_top_k: 3
+  early_stopping:
+    monitor: "val/loss"
+    mode: min
+    patience: 3
+  heatmap_logger:
+    num_samples: 3
