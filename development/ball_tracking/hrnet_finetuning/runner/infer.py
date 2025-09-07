@@ -11,6 +11,19 @@ from hydra.utils import to_absolute_path as abspath
 
 
 class InferRunner(BaseRunner):
+    """
+    Inference runner for HRNet3DStem-based ball heatmap → point estimation.
+
+    Tracker can be toggled via config:
+      - Preferred: cfg.infer.tracker.enable: bool
+      - Legacy fallback: cfg.infer.use_tracker: bool
+
+    Other tracker params (prefer nested):
+      - cfg.infer.tracker.tail          (fallback: cfg.infer.track_tail)
+      - cfg.infer.tracker.hm_threshold  (fallback: cfg.infer.hm_threshold)
+      - cfg.infer.tracker.max_missed    (fallback: cfg.infer.track_max_missed)
+    """
+
     def __init__(self, cfg):
         super().__init__(cfg)
         self.frames_in = cfg.model.frames_in
@@ -42,10 +55,32 @@ class InferRunner(BaseRunner):
         else:
             self.model = self.model.float()
 
-        # Tracker params (with safe defaults if not in config)
-        self.track_tail: int = int(getattr(cfg.infer, "track_tail", 30))
-        self.hm_threshold: float = float(getattr(cfg.infer, "hm_threshold", 0.2))
-        self.track_max_missed: int = int(getattr(cfg.infer, "track_max_missed", 30))
+        # --- Tracker config (nested preferred; top-level kept for backward compat) ---
+        tr_cfg = getattr(cfg.infer, "tracker", None)
+        # enable flag: prefer tracker.enable, fallback to infer.use_tracker, default True
+        self.use_tracker: bool = bool(
+            getattr(tr_cfg, "enable", getattr(cfg.infer, "use_tracker", True))
+            if tr_cfg is not None
+            else getattr(cfg.infer, "use_tracker", True)
+        )
+        # parameters (prefer nested)
+        self.track_tail: int = int(
+            getattr(tr_cfg, "tail", getattr(cfg.infer, "track_tail", 30))
+            if tr_cfg
+            else getattr(cfg.infer, "track_tail", 30)
+        )
+        self.hm_threshold: float = float(
+            getattr(tr_cfg, "hm_threshold", getattr(cfg.infer, "hm_threshold", 0.2))
+            if tr_cfg
+            else getattr(cfg.infer, "hm_threshold", 0.2)
+        )
+        self.track_max_missed: int = int(
+            getattr(tr_cfg, "max_missed", getattr(cfg.infer, "track_max_missed", 30))
+            if tr_cfg
+            else getattr(cfg.infer, "track_max_missed", 30)
+        )
+
+        # Drawing / overlay
         self.overlay_heatmap: bool = bool(getattr(cfg.infer, "overlay_heatmap", False))
         self.draw_radius: int = int(getattr(cfg.infer, "draw_radius", 5))
         self.draw_thickness: int = int(getattr(cfg.infer, "draw_thickness", 2))
@@ -122,7 +157,7 @@ class InferRunner(BaseRunner):
         else:
             hm_np = np.asarray(hm, dtype=np.float32)
         if hm_np.ndim == 3:
-            # Heuristic: use last channel as in upstream code, or max over channels
+            # Heuristic: use last channel or max over channels
             hm_np = hm_np[-1] if hm_np.shape[0] > 1 else hm_np[0]
 
         # Normalize 0..1 for a relative confidence
@@ -143,7 +178,7 @@ class InferRunner(BaseRunner):
         y0, y1 = max(py_hm - 1, 0), min(py_hm + 2, hm_norm.shape[0])
         x0, x1 = max(px_hm - 1, 0), min(px_hm + 2, hm_norm.shape[1])
         patch = hm_norm[y0:y1, x0:x1]
-        if patch.size > 0 and patch.sum() > 0:
+        if patch.size > 0 and float(patch.sum()) > 0.0:
             ys, xs = np.mgrid[y0:y1, x0:x1]
             py_hm_ref = float((ys * patch).sum() / patch.sum())
             px_hm_ref = float((xs * patch).sum() / patch.sum())
@@ -195,15 +230,19 @@ class InferRunner(BaseRunner):
         if cfg.infer.output_video:
             out_writer = self._init_writer(cv2, abspath(cfg.infer.output_video), fps, (self.input_h, self.input_w))
 
-        # Build tracker
-        from ..tracker import BallTracker
+        # Build tracker (optional)
+        tracker = None
+        simple_trail: list[Tuple[float, float]] = []
+        missed_simple = 0
+        if self.use_tracker:
+            from ..tracker import BallTracker
 
-        tracker = BallTracker(
-            image_size_hw=(self.input_h, self.input_w),
-            history_len=self.track_tail,
-            min_conf=self.hm_threshold,
-            max_missed=self.track_max_missed,
-        )
+            tracker = BallTracker(
+                image_size_hw=(self.input_h, self.input_w),
+                history_len=self.track_tail,
+                min_conf=self.hm_threshold,
+                max_missed=self.track_max_missed,
+            )
 
         if cfg.infer.save_heatmaps_dir:
             os.makedirs(abspath(cfg.infer.save_heatmaps_dir), exist_ok=True)
@@ -246,13 +285,33 @@ class InferRunner(BaseRunner):
             x = batch.unsqueeze(0).to(self.device)
             with torch.no_grad():
                 y_out = self.model(x)
+
+            # Assume dict of scale -> tensor list; take the first output scale
             scale = cfg.model.out_scales[0]
             y = y_out[scale][0]
             hm = y[-1] if (y.ndim == 3 and y.shape[0] > 1) else (y[0] if y.ndim == 3 else y.squeeze(0))
 
             # Measurement from heatmap
             meas_xy, conf = self._heatmap_to_point(hm, (self.input_h, self.input_w))
-            est_xy = tracker.update(meas_xy, conf)
+
+            if tracker is not None:
+                est_xy = tracker.update(meas_xy, conf)
+                trail = tracker.get_trail(self.track_tail)
+                missed_to_show = tracker.missed
+            else:
+                # No tracker: pass-through measurement and keep a simple visualization trail
+                if (meas_xy is not None) and (conf >= self.hm_threshold):
+                    simple_trail.append(meas_xy)
+                    if len(simple_trail) > self.track_tail:
+                        simple_trail = simple_trail[-self.track_tail :]
+                    est_xy = meas_xy
+                    missed_simple = 0
+                else:
+                    # If no confident detection, keep previous estimate but count as missed
+                    missed_simple += 1
+                    est_xy = simple_trail[-1] if simple_trail else (self.input_w * 0.5, self.input_h * 0.5)
+                trail = simple_trail
+                missed_to_show = missed_simple
 
             # Compose output frame
             if self.overlay_heatmap:
@@ -260,13 +319,19 @@ class InferRunner(BaseRunner):
             else:
                 disp = frame
 
-            trail = tracker.get_trail(self.track_tail)
-            disp = self._draw_tracking(cv2, disp, trail, est_xy, radius=self.draw_radius, thickness=self.draw_thickness)
+            disp = self._draw_tracking(
+                cv2,
+                disp,
+                trail,
+                est_xy,
+                radius=self.draw_radius,
+                thickness=self.draw_thickness,
+            )
 
             # Optional: draw debug text
             cv2.putText(
                 disp,
-                f"conf={conf:.2f} missed={tracker.missed}",
+                f"conf={conf:.2f} missed={missed_to_show}{' (trk)' if self.use_tracker else ' (no-trk)'}",
                 (10, 25),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
@@ -280,7 +345,8 @@ class InferRunner(BaseRunner):
 
             if cfg.infer.save_heatmaps_dir:
                 np.save(
-                    os.path.join(abspath(cfg.infer.save_heatmaps_dir), f"{out_idx:06d}.npy"), hm.detach().cpu().numpy()
+                    os.path.join(abspath(cfg.infer.save_heatmaps_dir), f"{out_idx:06d}.npy"),
+                    hm.detach().cpu().numpy(),
                 )
             out_idx += 1
             try:

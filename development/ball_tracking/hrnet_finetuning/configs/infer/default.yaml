@@ -9,3 +9,8 @@ normalize:
   mean: [0.485, 0.456, 0.406]
   std: [0.229, 0.224, 0.225]
 dtype: float32 # float32 | float16
+tracker:
+  enable: true # toggle here
+  tail: 30
+  hm_threshold: 0.7
+  max_missed: 30
