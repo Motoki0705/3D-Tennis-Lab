@@ -1,0 +1,26 @@
+video_path: "data/samples/test.mp4"
+output_video: "outputs/hrnet_infer/output_track.mp4"
+save_heatmaps_dir: null # e.g., "outputs/hrnet_infer/heatmaps"
+checkpoint: "tb_logs/hrnet_finetune/version_13/loss=0.0000.ckpt" # supports .pth/.pth.tar/.ckpt
+input_size: [288, 512] # H, W for resizing frames
+batch_size: 8
+stride: 1 # window stride over frames
+normalize:
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+dtype: float16 # float32 | float16
+render:
+  mode: heatmap # "heatmap" or "detect_and_draw"
+  colormap: JET # OpenCV colormap name (e.g., JET, TURBO, INFERNO if available)
+  blend_alpha: 0.40 # used when overlaying on frames
+
+# Shown only in detect_and_draw mode:
+overlay_heatmap: false
+draw_radius: 2
+draw_thickness: 2
+
+tracker:
+  enable: true # toggle tracker on/off
+  tail: 30
+  hm_threshold: 0.25
+  max_missed: 30

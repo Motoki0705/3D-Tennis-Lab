@@ -1,0 +1,83 @@
+defaults:
+  - data: seq
+  - losses: weights
+  - semisup: selftrain
+  - gan: none
+  - tracker: none
+  - physics: ballistics
+  - _self_
+
+seed: 42
+
+model:
+  backbone:
+    embed_dim: 96
+    depths: [1, 2, 4, 2]
+    num_heads: [3, 6, 12, 24]
+    window_size: 7
+    drop_path_rate: 0.1
+    moe:
+      enabled: false
+      stages: [16, 32]
+      num_experts: 4
+  temporal_encoder:
+    enabled: true
+    strides: [16, 32]
+  temporal:
+    enabled: true
+  deep_supervision_strides: [8, 16, 32]
+  decoder_channels: [256, 128, 64]
+  heatmap_channels: 1
+  heads:
+    hidden: 256
+
+streams:
+  unlabeled_ratio: 1.0
+
+semisup:
+  name: selftrain
+  enable: false
+  teacher: frozen
+  teacher_ckpt: checkpoints/supervised_student.ckpt
+  pseudo:
+    target: soft
+    q_weights: { peak: 0.5, entropy: 0.2, physics: 0.3, disc: 0.0 }
+    tau_start: 0.3
+    tau_end: 0.7
+    warmup_epochs: 10
+  consistency_weight: 0.0
+
+gan:
+  enable: false
+  d_steps: 5
+  lambda_gp: 10.0
+  lambda_adv: 0.05
+
+tracker:
+  fuse: false
+  kalman:
+    q_pos: 1.0
+    q_vel: 0.1
+    r_det: 2.0
+
+opt:
+  lr_backbone: 1e-4
+  lr_heads: 1e-4
+  wd: 0.05
+  scheduler:
+    type: "cosine" # (reserved for future variants)
+    interval: "epoch" # "epoch" or "step"
+    warmup_epochs: 5 # if interval=="epoch"
+    warmup_steps: null # if interval=="step", set an int or leave null to derive from warmup_epochs
+    warmup_start_factor: 0.1 # LR multiplier at start of warmup (0.1 → 10% of base LR)
+    min_lr: 1e-6 # eta_min
+
+trainer:
+  _target_: pytorch_lightning.Trainer
+  max_epochs: 80
+  precision: 16-mixed
+  accelerator: auto
+  devices: 1
+  log_every_n_steps: 10
+  enable_checkpointing: true
+  gradient_clip_val: 0.0

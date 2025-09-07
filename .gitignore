@@ -167,5 +167,28 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# data files
+# data files1, hydra config files, tblogs
 data/
+outputs/
+tb_logs/
+results/
+
+# codex cli modules
+node_modules/
+
+# picture files
+*.png
+*.jpg
+*.jpeg
+
+# annotation files
+*.json
+*.jsonl
+
+# video files
+*.mp4
+
+# model weights
+*.pth
+*.ckpt
+*.tar

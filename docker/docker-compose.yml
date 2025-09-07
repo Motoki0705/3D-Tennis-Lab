@@ -1,13 +1,67 @@
- 
-version: '3.8'
+# 推奨: Compose v2。version キーは省略して最新スキーマを利用
 services:
-  dev:
+  dev: # CPU 環境
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      target: app-cpu
     ports:
-      - "8888:8888"
+      - "8888:8888" # Jupyter 等
+    volumes:
+      - ..:/app # ソース
+      - ../data:/app/data # データ
+      # Hide local virtualenvs inside container
+      - /app/.venv
+      - /app/.venv-wsl
+    # 安定化オプション
+    tty: true # 対話シェル
+    init: true # PID1 に init を入れてゾンビ回収
+    restart: unless-stopped # 予期せぬ終了から復帰
+    shm_size: "8gb" # DataLoader / OpenCV 等の共有メモリ増強
+    # 起動直後の重い処理による 137 落ちを避けるため、まず常駐させる
+    command: sleep infinity
+    environment:
+      TZ: Asia/Tokyo
+      PYTHONUNBUFFERED: "1"
+    healthcheck:
+      test: ["CMD-SHELL", "python -V >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  cuda_dev: # GPU（CUDA）環境
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: app-cuda
+    ports:
+      - "8888:8888" # Jupyter
+      - "8000:8000" # FastAPI
+      - "6006:6006" # TensorBoard
     volumes:
       - ..:/app
       - ../data:/app/data
+      # Hide local virtualenvs inside container
+      - /app/.venv
+      - /app/.venv-wsl
+    # GPU 指定：Compose v2 では deploy: より gpus: all が簡潔・確実
+    gpus: all
     tty: true
+    init: true
+    restart: unless-stopped
+    shm_size: "8gb"
+    command: sleep infinity
+    environment:
+      TZ: Asia/Tokyo
+      PYTHONUNBUFFERED: "1"
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,graphics
+      PYOPENGL_PLATFORM: egl
+      EGL_PLATFORM: surfaceless
+      PYGLET_HEADLESS: "1"
+
+    healthcheck:
+      test: ["CMD-SHELL", "nvidia-smi >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5

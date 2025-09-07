@@ -1,0 +1,22 @@
+defaults:
+  - augmentation: default
+  - _self_
+
+images_root: "data/processed/ball/images"  # PLEASE FILL IN THIS PATH
+
+# Single annotation file; DataModule will split into train/val by clip.
+labeled_json: "data/processed/ball/annotation.json"  # PLEASE FILL IN THIS PATH
+val_ratio: 0.1
+
+img_size: [288, 512]
+T: 3
+frame_stride: 1
+output_stride: 1
+sigma_px: 3.0
+
+batch_size: 16
+num_workers: 4
+
+normalize:
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
