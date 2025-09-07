@@ -1,72 +1,67 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import pytorch_lightning as pl
+from omegaconf import OmegaConf, DictConfig
 
-from ..model.lite_unet_context import build_preset_a, LiteUNetContext
+from ..model import model_registry
 from ....utils.loss import loss_registry
 
 
-@dataclass
-class ModelConfig:
-    num_keypoints: int = 15
-    variant: str = "small"  # nano | small | base
-    out_stride: int = 4  # 4 or 2
-    use_offset_head: bool = False
-    deep_supervision: bool = False
-
-
-class LiteUNetContextLitModule(pl.LightningModule):
-    def __init__(self, cfg: Any):
+class CourtLitModule(pl.LightningModule):
+    def __init__(self, cfg: DictConfig):
         super().__init__()
         self.cfg = cfg
 
         # Model config
-        mcfg = getattr(cfg, "model", {})
-        self.model_cfg = ModelConfig(
-            num_keypoints=int(getattr(mcfg, "num_keypoints", 15)),
-            variant=str(getattr(mcfg, "variant", "small")),
-            out_stride=int(getattr(mcfg, "out_stride", 4)),
-            use_offset_head=bool(getattr(mcfg, "use_offset_head", False)),
-            deep_supervision=bool(getattr(mcfg, "deep_supervision", False)),
-        )
+        mcfg = cfg.model
+        model_name = cfg.experiment_name
+        if model_name is None:
+            raise ValueError("cfg.experiment_name must be set to identify the model.")
+
+        # Get builder from registry
+        builder = model_registry.get(model_name)
+        if builder is None:
+            raise ValueError(f"Unknown model_name: {model_name}. Available: {list(model_registry.keys())}")
+
+        # Get model params from config, converting OmegaConf to dict
+        model_params = OmegaConf.to_container(mcfg, resolve=True)
 
         # Build model
-        self.model: LiteUNetContext = build_preset_a(
-            num_keypoints=self.model_cfg.num_keypoints,
-            variant=self.model_cfg.variant,
-            out_stride=self.model_cfg.out_stride,
-            use_offset_head=self.model_cfg.use_offset_head,
-            deep_supervision=self.model_cfg.deep_supervision,
-        )
+        self.model = builder(**model_params)
 
-        # Loss (heatmap)
-        lcfg = getattr(getattr(cfg, "training", {}), "loss", {})
-        loss_name = str(getattr(lcfg, "name", "mse")).lower()
-        loss_params = getattr(lcfg, "params", {}) if hasattr(lcfg, "params") else {}
-        # default to mse to avoid logits/probability ambiguity
+        # Store some model params for loss calculation
+        self.use_offset_head = bool(mcfg.get("use_offset_head", False))
+        self.deep_supervision = bool(mcfg.get("deep_supervision", False))
+
+        # --- Loss (heatmap) ---
+        lcfg = cfg.training.loss or OmegaConf.create({})
+        loss_name = str(lcfg.get("name", "mse")).lower()
+        loss_params = lcfg.get("params")
+        loss_params_dict = OmegaConf.to_container(loss_params, resolve=True) if loss_params else {}
+
         if loss_name not in ("mse", "focal", "bce", "kldiv"):
             loss_name = "mse"
-        self.loss_fn = loss_registry.get(loss_name, **(loss_params or {}))
-        self.ds_weight = float(getattr(getattr(cfg, "training", {}), "deep_supervision_weight", 0.4))
+        self.loss_fn = loss_registry.get(loss_name, **(loss_params_dict or {}))
+        self.ds_weight = float(cfg.training.get("deep_supervision_weight", 0.4))
 
-        # Loss (offset)
-        ocfg = getattr(getattr(cfg, "training", {}), "offset_loss", {})
-        o_name = str(getattr(ocfg, "name", "l1")).lower()
-        o_params = getattr(ocfg, "params", {}) if hasattr(ocfg, "params") else {}
+        # --- Loss (offset) ---
+        ocfg = cfg.training.offset_loss or OmegaConf.create({})
+        o_name = str(ocfg.get("name", "l1")).lower()
+        o_params = ocfg.get("params")
+        o_params_dict = OmegaConf.to_container(o_params, resolve=True) if o_params else {}
+
         if o_name in ("mse", "bce", "focal", "kldiv"):
-            self.offset_loss_fn = loss_registry.get(o_name, **(o_params or {}))
+            self.offset_loss_fn = loss_registry.get(o_name, **(o_params_dict or {}))
         elif o_name in ("l1", "mae"):
             self.offset_loss_fn = nn.L1Loss(reduction="none")
         else:
-            # fallback to L2/MSE
             self.offset_loss_fn = nn.MSELoss(reduction="none")
-        self.offset_weight = float(getattr(ocfg, "weight", 1.0))
+        self.offset_weight = float(ocfg.get("weight", 1.0))
 
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor | Dict[str, torch.Tensor]]:
         return self.model(x)
@@ -101,7 +96,7 @@ class LiteUNetContextLitModule(pl.LightningModule):
 
         loss = loss_main
         logs = {"loss_main": loss_main.detach()}
-        if self.model_cfg.deep_supervision and y_aux is not None:
+        if self.deep_supervision and y_aux is not None:
             aux_dict = pred.get("aux") if isinstance(pred, dict) else None
             y_hat_aux = aux_dict.get("os8") if isinstance(aux_dict, dict) else None
             if y_hat_aux is not None:
@@ -110,7 +105,7 @@ class LiteUNetContextLitModule(pl.LightningModule):
                 logs["loss_aux"] = loss_aux.detach()
 
         # Offset loss
-        if self.model_cfg.use_offset_head and isinstance(pred, dict) and "offset" in pred and isinstance(batch, dict):
+        if self.use_offset_head and isinstance(pred, dict) and "offset" in pred and isinstance(batch, dict):
             y_hat_off = pred["offset"]  # [B, 2K, H, W]
             y_off = batch.get("offsets")  # [B, 2K, H, W]
             m_off = batch.get("offset_mask")  # [B, K, H, W] or None
@@ -161,15 +156,15 @@ class LiteUNetContextLitModule(pl.LightningModule):
         }
 
     def configure_optimizers(self):
-        tcfg = getattr(self.cfg, "training", {})
-        lr = float(getattr(tcfg, "lr", 3e-4))
-        wd = float(getattr(tcfg, "weight_decay", 1e-4))
-        betas = tuple(getattr(tcfg, "betas", (0.9, 0.999)))
+        tcfg = self.cfg.training
+        lr = float(tcfg.get("lr", 3e-4))
+        wd = float(tcfg.get("weight_decay", 1e-4))
+        betas = tuple(tcfg.get("betas", (0.9, 0.999)))
         optimizer = optim.AdamW(self.parameters(), lr=lr, weight_decay=wd, betas=betas)
 
-        max_epochs = int(getattr(tcfg, "max_epochs", 50))
-        warmup_epochs = int(getattr(tcfg, "warmup_epochs", 0))
-        eta_min = float(getattr(tcfg, "eta_min", 1e-6))
+        max_epochs = int(tcfg.get("max_epochs", 50))
+        warmup_epochs = int(tcfg.get("warmup_epochs", 0))
+        eta_min = float(tcfg.get("eta_min", 1e-6))
 
         scheds = []
         milestones = []
