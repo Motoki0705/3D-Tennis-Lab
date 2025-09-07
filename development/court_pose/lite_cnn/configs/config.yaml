@@ -1,0 +1,32 @@
+defaults:
+  - model: lite_unet_context
+  - data: court_keypoints
+  - _self_
+
+task: train
+
+seed: 42
+device: auto
+
+experiment_name: lite_unet_context
+
+training:
+  max_epochs: 50
+  accelerator: auto
+  devices: 1
+  precision: 16-mixed
+  lr: 3e-4
+  weight_decay: 1e-4
+  warmup_epochs: 0
+  eta_min: 1e-6
+  early_stop_patience: 10
+  deep_supervision_weight: 0.4
+  loss:
+    name: mse
+  offset_loss:
+    name: l1
+    weight: 1.0
+
+callbacks:
+  heatmap_logger:
+    num_samples: 3
