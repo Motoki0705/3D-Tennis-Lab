@@ -1,4 +1,4 @@
-# filename: development/court_pose/01_vit_heatmap/dataset.py
+# filename: development/court_pose/vit_heatmap/training/dataset.py
 import json
 from pathlib import Path
 

@@ -1,0 +1,28 @@
+defaults:
+  - model: vit_heatmap
+  - dataset: court_keypoints
+  - callbacks: deafult
+  - _self_
+
+task: train
+
+seed: 42
+device: auto
+
+experiment_name: vit_heatmap
+
+training:
+  max_epochs: 15
+  lr: 1e-4
+  vit_lr: 1e-5
+  weight_decay: 1e-5
+  precision: 16-mixed
+  accelerator: auto
+  devices: 1
+  loss:
+    name: mse
+    params: {}
+  freeze_vit_epochs: 2
+
+evaluation:
+  pck_threshold: 0.05

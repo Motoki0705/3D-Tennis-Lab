@@ -1,0 +1,11 @@
+img_dir: data/processed/court/images/
+annotation_file: data/processed/court/annotation_pruned.json
+img_size: [224, 224]
+heatmap_size: [224, 224]
+heatmap_sigma: 3.0
+batch_size: 48
+num_workers: 4
+train_ratio: 0.8
+val_ratio: 0.1
+pin_memory: true
+persistent_workers: false
