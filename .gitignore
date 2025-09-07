@@ -188,7 +188,7 @@ node_modules/
 # video files
 *.mp4
 
-# model weights
+# model files
 *.pth
 *.ckpt
-*.tar
+*.pth.tar
