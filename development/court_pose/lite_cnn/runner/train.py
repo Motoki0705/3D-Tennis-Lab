@@ -18,12 +18,12 @@ class TrainRunner(BaseRunner):
         super().__init__(cfg)
 
     def run(self):
-        from ..training.lit_module import LiteUNetContextLitModule
+        from ..training.lit_module import CourtLitModule
         from ..training.datamodule import CourtDataModule, DataConfig, AugmentationConfig
 
         # LightningModule
-        lit_module = LiteUNetContextLitModule(self.cfg)
-        logger.info("Initialized LiteUNetContextLitModule")
+        lit_module = CourtLitModule(self.cfg)
+        logger.info(f"Initialized {self.cfg.experiment_name} LitModule")
 
         # DataModule
         dcfg_raw = getattr(self.cfg, "data", None)
@@ -54,7 +54,7 @@ class TrainRunner(BaseRunner):
 
         # Trainer
         tcfg = getattr(self.cfg, "training", {})
-        exp_name = getattr(self.cfg, "experiment_name", "lite_unet_context")
+        exp_name = getattr(self.cfg, "experiment_name", "default_experiment")
         logger_tb = TensorBoardLogger(save_dir="tb_logs", name=exp_name)
 
         ckpt = ModelCheckpoint(

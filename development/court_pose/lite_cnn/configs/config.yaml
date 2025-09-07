@@ -1,5 +1,5 @@
 defaults:
-  - model: lite_unet_context
+  - model: deep_context_fpn
   - data: court_keypoints
   - _self_
 
@@ -8,7 +8,7 @@ task: train
 seed: 42
 device: auto
 
-experiment_name: lite_unet_context
+experiment_name: deep_context_fpn
 
 training:
   max_epochs: 100

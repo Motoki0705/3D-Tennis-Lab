@@ -1,0 +1,11 @@
+num_keypoints: 15
+variant: small # nano | small | base
+depths: [3, 4, 6]
+out_stride: 4 # 4 or 2
+attn_layers: 3
+attn_kv_down: 4
+use_offset_head: true
+deep_supervision: true
+fpn_width: 96
+se: true
+exp: 3
