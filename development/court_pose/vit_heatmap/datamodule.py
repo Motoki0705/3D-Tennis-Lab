@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from ...utils.lightning.base_datamodule import BaseDataModule
+from ....utils.lightning.base_datamodule import BaseDataModule
 from .dataset import CourtKeypointDataset  # ← 実際のdatasetクラスに合わせてインポート
 
 

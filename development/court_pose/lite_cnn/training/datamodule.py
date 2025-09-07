@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
 
-from ...utils.lightning.base_datamodule import BaseDataModule
+from ....utils.lightning.base_datamodule import BaseDataModule
 from .dataset import CourtKeypointDataset
 from .transforms import get_train_transforms, get_val_transforms
 

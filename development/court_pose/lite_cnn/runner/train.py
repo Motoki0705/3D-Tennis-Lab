@@ -69,7 +69,7 @@ class TrainRunner(BaseRunner):
         progress = RichProgressBar()
         # Heatmap visualizer
         try:
-            from ...utils.callbacks.heatmap_logger import HeatmapImageLogger
+            from ....utils.callbacks.heatmap_logger import HeatmapImageLogger
 
             cb_cfg = getattr(self.cfg, "callbacks", None)
             hm_cfg = getattr(cb_cfg, "heatmap_logger", None) if cb_cfg is not None else None

@@ -9,7 +9,7 @@ import torch.optim as optim
 import pytorch_lightning as pl
 
 from ..model.lite_unet_context import build_preset_a, LiteUNetContext
-from ...utils.loss import loss_registry
+from ....utils.loss import loss_registry
 
 
 @dataclass
