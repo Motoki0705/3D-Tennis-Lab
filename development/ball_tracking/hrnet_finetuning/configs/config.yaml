@@ -17,9 +17,16 @@ training:
   accelerator: auto
   devices: 1
   precision: 16-mixed
-  lr: 1e-4
+  lr: 1e-3
   weight_decay: 1e-4
   warmup_epochs: 2
-  freeze_epochs: 1
+  freeze_epochs: 0
   eta_min: 1e-6
   pretrained_checkpoint: "development/ball_tracking/hrnet_finetuning/weight/wasb_tennis_best_3dstem.pth.tar"
+  # Loss configuration
+  # name: one of [mse, focal, kl]
+  loss:
+    name: mse
+    gamma: 2.0 # used for focal
+    tau: 1.0 # used for kl
+    eps: 1e-6 # numerical stability
