@@ -187,3 +187,8 @@ node_modules/
 
 # video files
 *.mp4
+
+# model files
+*.pth
+*.ckpt
+*.pth.tar
