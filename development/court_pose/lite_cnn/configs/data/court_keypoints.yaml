@@ -6,7 +6,7 @@ output_stride: 4      # モデルと一致させる
 sigma: 2.0
 use_offset: true
 
-batch_size: 8
+batch_size: 32
 num_workers: 4
 pin_memory: true
 persistent_workers: true

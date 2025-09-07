@@ -11,7 +11,7 @@ device: auto
 experiment_name: lite_unet_context
 
 training:
-  max_epochs: 50
+  max_epochs: 100
   accelerator: auto
   devices: 1
   precision: 16-mixed
