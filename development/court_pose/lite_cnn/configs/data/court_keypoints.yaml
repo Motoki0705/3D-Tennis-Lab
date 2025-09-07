@@ -1,5 +1,5 @@
 img_dir: data/processed/court/images   # 画像ディレクトリ（プロジェクトルートからの相対または絶対パス）
-annotation_file: data/processed/court/annotation.json  # COCO形式アノテーション
+annotation_file: data/processed/court/annotation_pruned.json  # COCO形式アノテーション
 
 img_size: [288, 512]  # (H, W)
 output_stride: 4      # モデルと一致させる

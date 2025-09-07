@@ -3,6 +3,20 @@ import cv2
 from albumentations.pytorch import ToTensorV2
 
 
+def _pad_if_needed(height: int, width: int, *, border_mode: int = cv2.BORDER_CONSTANT, value: int = 0):
+    """Create PadIfNeeded compatible across albumentations versions.
+
+    In some versions, the kwarg is `value`, in others it's `border_value`.
+    """
+    try:
+        return A.PadIfNeeded(min_height=height, min_width=width, border_mode=border_mode, value=value)
+    except TypeError:
+        try:
+            return A.PadIfNeeded(min_height=height, min_width=width, border_mode=border_mode, border_value=value)
+        except TypeError:
+            return A.PadIfNeeded(min_height=height, min_width=width, border_mode=border_mode)
+
+
 def get_train_transforms(
     height: int,
     width: int,
@@ -40,7 +54,7 @@ def get_train_transforms(
                 p=p_color_jitter,
             ),
             A.LongestMaxSize(max_size=max(height, width), interpolation=cv2.INTER_AREA),
-            A.PadIfNeeded(min_height=height, min_width=width, border_mode=0, value=0),
+            _pad_if_needed(height, width, border_mode=cv2.BORDER_CONSTANT, value=0),
             A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ToTensorV2(),
         ],
@@ -52,7 +66,7 @@ def get_val_transforms(height: int, width: int):
     return A.Compose(
         [
             A.LongestMaxSize(max_size=max(height, width), interpolation=cv2.INTER_AREA),
-            A.PadIfNeeded(min_height=height, min_width=width, border_mode=0, value=0),
+            _pad_if_needed(height, width, border_mode=cv2.BORDER_CONSTANT, value=0),
             A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ToTensorV2(),
         ],

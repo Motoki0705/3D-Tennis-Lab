@@ -13,7 +13,12 @@ class BaseDataModule(pl.LightningDataModule):
         test_transforms=None,
     ):
         super().__init__()
-        self.save_hyperparameters(config)
+        # Some callers pass Hydra DictConfig (supported), others pass lightweight objects.
+        # Save hparams when supported; otherwise skip without failing.
+        try:
+            self.save_hyperparameters(config)
+        except Exception:
+            pass
         self.config = config
         self.full_dataset = dataset
         self.train_transforms = train_transforms
