@@ -1,9 +1,8 @@
-# filename: development/court_pose/01_vit_heatmap/lit_module.py
 import torch
 
-from ....utils.lightning.base_lit_module import BaseLitModule
-from ....utils.loss import loss_registry
-from .model.vit_heatmap import VitHeatmapModel
+from development.utils.lightning.base_lit_module import BaseLitModule
+from development.utils.loss import loss_registry
+from ..model.vit_heatmap import VitHeatmapModel
 
 
 class CourtLitModule(BaseLitModule):
