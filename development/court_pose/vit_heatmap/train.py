@@ -6,8 +6,8 @@ from omegaconf import DictConfig  # HydraとOmegaConfをインポート
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint, RichProgressBar
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from ...utils.callbacks.heatmap_logger import HeatmapImageLogger
-from ...utils.transformers.keypoint_transformer import prepare_transforms
+from ....utils.callbacks.heatmap_logger import HeatmapImageLogger
+from ....utils.transformers.keypoint_transformer import prepare_transforms
 from .datamodule import CourtDataModule
 from .lit_module import CourtLitModule
 
