@@ -1,0 +1,10 @@
+checkpoint:
+  monitor: val/loss
+  mode: min
+  save_top_k: 3
+early_stopping:
+  monitor: val/loss
+  mode: min
+  patience: 3
+heatmap_logger:
+  num_samples: 3
