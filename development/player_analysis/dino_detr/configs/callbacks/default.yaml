@@ -1,0 +1,11 @@
+tb_image_logger:
+  every_n_steps: 200
+  num_samples: 2
+  mode: val
+checkpoint:
+  monitor: val/loss
+  mode: min
+  save_top_k: 3
+  filename: "epoch={epoch}-valloss={val/loss:.4f}"
+lr_monitor:
+  logging_interval: epoch

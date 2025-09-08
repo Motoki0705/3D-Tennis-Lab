@@ -1,0 +1,6 @@
+image: data/ball_tracking/sample.jpg
+images_dir: null
+score_thresh: 0.3
+max_dets: 100
+checkpoint: null
+device: auto

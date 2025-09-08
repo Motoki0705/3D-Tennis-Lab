@@ -1,0 +1,38 @@
+# Local DETR (model/detr.py) config
+
+# Transformer / DETR core
+hidden_dim: 256
+dropout: 0.1
+nheads: 8
+dim_feedforward: 2048
+enc_layers: 6
+dec_layers: 6
+pre_norm: false
+
+# Matcher costs
+set_cost_class: 1.0
+set_cost_bbox: 5.0
+set_cost_giou: 2.0
+
+# Loss weights
+bbox_loss_coef: 5.0
+giou_loss_coef: 2.0
+mask_loss_coef: 1.0
+dice_loss_coef: 1.0
+
+# Model behavior
+num_queries: 100
+aux_loss: true
+masks: false
+frozen_weights: null
+lr_backbone: 0.0
+dataset_file: coco
+
+# DINOv3 backbone source (configurable)
+dino_repo_dir: third_party/dinov3
+dino_model_name: dinov3_vitl16
+
+# Optimizer (read in LightningModule)
+lr: 1e-4
+weight_decay: 1e-4
+betas: [0.9, 0.999]

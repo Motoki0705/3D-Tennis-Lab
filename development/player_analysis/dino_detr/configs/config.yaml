@@ -1,0 +1,18 @@
+defaults:
+  - callbacks: default
+  - data: dino_detr
+  - model: dino_detr
+  - infer: default
+  - _self_
+
+# Hydra root config for dino_detr
+task: train # train | infer
+experiment_name: dino_detr
+device: auto
+
+training:
+  max_epochs: 50
+  accelerator: auto
+  devices: 1
+  precision: 32
+  grad_clip_val: 0.0
