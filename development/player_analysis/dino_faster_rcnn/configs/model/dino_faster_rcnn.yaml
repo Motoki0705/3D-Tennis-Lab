@@ -1,0 +1,19 @@
+_target_: model.dino_faster_rcnn.DinoFasterRCNN
+
+backbone:
+  # DINOv3 (local torch.hub) backbone settings
+  repo_dir: third_party/dinov3
+  entry: dinov3_vits16
+  weights: third_party/dinov3/weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth
+  out_channels: 256
+  fpn_levels: 3
+  freeze: true
+
+num_classes: 2 # e.g., 1 class (player) + background handled internally by torchvision
+image_mean: [0.485, 0.456, 0.406]
+image_std: [0.229, 0.224, 0.225]
+min_size: 640
+max_size: 1280
+box_score_thresh: 0.05
+box_nms_thresh: 0.5
+box_detections_per_img: 100

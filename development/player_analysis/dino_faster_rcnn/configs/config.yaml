@@ -1,0 +1,13 @@
+# Top-level task selector
+task: train # train | infer
+
+defaults:
+  - model: dino_faster_rcnn
+  - data: coco_paths
+  - trainer: default
+  - _self_
+
+seed: 42
+
+work_dir: ${hydra:runtime.output_dir}
+exp_name: dino_faster_rcnn_baseline
