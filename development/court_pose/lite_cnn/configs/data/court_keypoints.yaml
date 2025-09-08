@@ -1,0 +1,28 @@
+img_dir: data/processed/court/images   # 画像ディレクトリ（プロジェクトルートからの相対または絶対パス）
+annotation_file: data/processed/court/annotation_pruned.json  # COCO形式アノテーション
+
+img_size: [288, 512]  # (H, W)
+output_stride: 4      # モデルと一致させる
+sigma: 2.0
+use_offset: true
+
+batch_size: 32
+num_workers: 4
+pin_memory: true
+persistent_workers: true
+
+train_ratio: 0.8
+val_ratio: 0.1
+
+augmentation:
+  p_horizontal_flip: 0.5
+  p_affine: 0.3
+  scale_limit: 0.05
+  shift_limit: 0.05
+  p_blur: 0.05
+  blur_limit: 3
+  p_color_jitter: 0.3
+  brightness_limit: 0.1
+  contrast_limit: 0.1
+  saturation_limit: 0.05
+  hue_limit: 0.03
