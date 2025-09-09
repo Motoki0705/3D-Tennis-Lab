@@ -1,0 +1,23 @@
+batch_size: 4
+num_workers: 4
+pin_memory: true
+
+train:
+  images: data/processed/ball/images  # directory with images
+  ann: data/processed/ball/annotation.json  # COCO-format annotations with ball & player
+
+val:
+  images: null  # if null, uses train paths
+  ann: null
+
+test:
+  images: null
+  ann: null
+
+class_names: ["player"]
+
+image_size: 1024  # square resize on long edge
+
+# Dataset filtering parameters (documented; dataset defaults match these)
+target_category: "player"
+required_instances_per_image: 2

@@ -10,30 +10,62 @@ from torch.utils.data import Dataset
 
 
 class CocoDetDataset(Dataset):
-    """Minimal COCO bbox dataset for Faster R-CNN training.
+    """COCO bbox dataset for Faster R-CNN training focused on players.
 
-    Expects COCO-style instances JSON with bbox in [x,y,w,h] and category_id.
+    - Expects COCO-style JSON (bbox in [x,y,w,h]).
+    - Filters to the `player` category and keeps images with exactly two players.
+    - Maps category ids to contiguous labels (player -> 1).
     """
 
-    def __init__(self, images_dir: str, ann_file: str, transforms=None):
+    def __init__(
+        self,
+        images_dir: str,
+        ann_file: str,
+        transforms=None,
+        target_category: str = "player",
+        required_instances_per_image: int = 2,
+    ):
         self.images_dir = images_dir
         self.ann_file = ann_file
         self.transforms = transforms
+        self.target_category = target_category
+        self.required_instances_per_image = required_instances_per_image
 
         with open(ann_file, "r", encoding="utf-8") as f:
             coco = json.load(f)
 
+        # Resolve target category id(s)
+        cat_name_to_id = {c.get("name"): c.get("id") for c in coco.get("categories", [])}
+        if target_category not in cat_name_to_id:
+            raise ValueError(f"Category '{target_category}' not found in categories: {list(cat_name_to_id.keys())}")
+        self.target_cat_id = cat_name_to_id[target_category]
+
+        # Index images
         self.id_to_img = {img["id"]: img for img in coco.get("images", [])}
-        self.img_to_anns: Dict[int, List[Dict[str, Any]]] = {img_id: [] for img_id in self.id_to_img.keys()}
+
+        # Collect only target-category annotations per image
+        img_to_all_anns: Dict[int, List[Dict[str, Any]]] = {img_id: [] for img_id in self.id_to_img.keys()}
         for ann in coco.get("annotations", []):
             if ann.get("iscrowd", 0) == 1:
                 continue
-            self.img_to_anns[ann["image_id"]].append(ann)
-        self.img_ids = list(self.id_to_img.keys())
+            if ann.get("category_id") != self.target_cat_id:
+                continue
+            # Basic bbox sanity check to avoid degenerate boxes
+            x, y, w, h = ann.get("bbox", [0, 0, 0, 0])
+            if w is None or h is None or w <= 1 or h <= 1:
+                continue
+            img_to_all_anns[ann["image_id"]].append(ann)
 
-        # Optional mapping for category ids to contiguous labels 1..K
-        cat_ids = sorted({ann["category_id"] for anns in self.img_to_anns.values() for ann in anns})
-        self.catid_to_label = {cid: i + 1 for i, cid in enumerate(cat_ids)}  # 0 is background in torchvision
+        # Keep only images with exactly the required number of target instances
+        self.img_to_anns: Dict[int, List[Dict[str, Any]]] = {}
+        for img_id, anns in img_to_all_anns.items():
+            if len(anns) == self.required_instances_per_image:
+                self.img_to_anns[img_id] = anns
+
+        self.img_ids = list(self.img_to_anns.keys())
+
+        # Mapping for category ids to contiguous labels 1..K (only target -> 1)
+        self.catid_to_label = {self.target_cat_id: 1}  # 0 is background in torchvision
 
     def __len__(self) -> int:
         return len(self.img_ids)
@@ -55,7 +87,7 @@ class CocoDetDataset(Dataset):
             if w <= 1 or h <= 1:
                 continue
             boxes.append([x, y, w, h])
-            labels.append(self.catid_to_label[a["category_id"]])
+            labels.append(self.catid_to_label[self.target_cat_id])
 
         class_labels = labels.copy()  # for albumentations
 
