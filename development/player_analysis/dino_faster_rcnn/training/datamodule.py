@@ -33,9 +33,19 @@ class DetectionDataModule(pl.LightningDataModule):
 
     def setup(self, stage: Optional[str] = None):
         self.train_ds = CocoDetDataset(
-            self.train_images, self.train_ann, transforms=get_train_transforms(self.image_size)
+            self.train_images,
+            self.train_ann,
+            transforms=get_train_transforms(self.image_size),
+            target_category="player",
+            required_instances_per_image=2,
         )
-        self.val_ds = CocoDetDataset(self.val_images, self.val_ann, transforms=get_val_transforms(self.image_size))
+        self.val_ds = CocoDetDataset(
+            self.val_images,
+            self.val_ann,
+            transforms=get_val_transforms(self.image_size),
+            target_category="player",
+            required_instances_per_image=2,
+        )
 
     def train_dataloader(self):
         return DataLoader(
