@@ -1,5 +1,3 @@
-_target_: model.dino_faster_rcnn.DinoFasterRCNN
-
 backbone:
   # DINOv3 (local torch.hub) backbone settings
   repo_dir: third_party/dinov3

@@ -90,7 +90,8 @@ class DINOv3ViTAdapter(nn.Module):
         lat4 = self.make_coarse4(c4)
         lat5 = self.make_coarse5(c5)
 
-        fpn_out = self.fpn({"c3": lat3, "c4": lat4, "c5": lat5})
+        # Use default featmap names ("0","1","2") expected by torchvision's ROI pooler
+        fpn_out = self.fpn({"0": lat3, "1": lat4, "2": lat5})
         return fpn_out
 
 

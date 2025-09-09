@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-
+import hydra
 import pytorch_lightning as pl
 from omegaconf import DictConfig
+from pytorch_lightning.loggers import TensorBoardLogger
 
-from training.datamodule import DetectionDataModule
-from training.lit_module import DetectionLitModule
-from model.dino_faster_rcnn import DinoFasterRCNN
+from ..training.datamodule import DetectionDataModule
+from ..training.lit_module import DetectionLitModule
+from ..model.dino_faster_rcnn import DinoFasterRCNN
 
 
 class TrainRunner:
@@ -30,20 +31,12 @@ class TrainRunner:
 
         # Model
         model = DinoFasterRCNN(**self.cfg.model)
-        lit = DetectionLitModule(model=model)
+        lit = DetectionLitModule(model=model, lr=self.cfg.lit_module.lr, weight_decay=self.cfg.lit_module.weight_decay)
 
-        # Callbacks and logging
-        callbacks = [
-            pl.callbacks.ModelCheckpoint(
-                dirpath=self.cfg.trainer.checkpoint_dir,
-                filename="epoch={epoch}-val_loss={val/loss:.3f}",
-                monitor="val/loss",
-                mode="min",
-                save_top_k=3,
-                save_last=True,
-            ),
-            pl.callbacks.LearningRateMonitor(logging_interval="step"),
-        ]
+        # Instantiate callbacks from config
+        callbacks = list(hydra.utils.instantiate(self.cfg.callbacks).values())
+
+        logger = TensorBoardLogger(**self.cfg.logger)
 
         trainer = pl.Trainer(
             accelerator=self.cfg.trainer.accelerator,
@@ -57,6 +50,7 @@ class TrainRunner:
             gradient_clip_val=self.cfg.trainer.gradient_clip_val,
             detect_anomaly=self.cfg.trainer.detect_anomaly,
             callbacks=callbacks,
+            logger=logger,
         )
 
         trainer.fit(lit, datamodule=dm)

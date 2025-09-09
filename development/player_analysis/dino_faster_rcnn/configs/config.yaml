@@ -5,9 +5,20 @@ defaults:
   - model: dino_faster_rcnn
   - data: coco_paths
   - trainer: default
+  - callbacks: default
   - _self_
 
 seed: 42
 
 work_dir: ${hydra:runtime.output_dir}
 exp_name: dino_faster_rcnn_baseline
+
+# Callbacks will be instantiated from the `callbacks` group
+callbacks:
+  _target_: hydra.utils.instantiate
+  _recursive_: false
+
+logger:
+  save_dir: "tb_logs"
+  name: "${exp_name}"
+  version: "${now:%Y-%m-%d_%H-%M-%S}"

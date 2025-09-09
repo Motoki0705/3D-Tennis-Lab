@@ -4,7 +4,7 @@ from __future__ import annotations
 import torch
 from omegaconf import DictConfig
 
-from model.dino_faster_rcnn import DinoFasterRCNN
+from ..model.dino_faster_rcnn import DinoFasterRCNN
 
 
 class InferRunner:
