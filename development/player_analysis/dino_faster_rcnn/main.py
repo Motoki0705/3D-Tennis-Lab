@@ -4,8 +4,8 @@ from typing import Literal
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
-from runner.train import TrainRunner
-from runner.infer import InferRunner
+from .runner.train import TrainRunner
+from .runner.infer import InferRunner
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")

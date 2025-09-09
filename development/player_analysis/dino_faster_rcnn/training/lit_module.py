@@ -16,19 +16,44 @@ class DetectionLitModule(pl.LightningModule):
 
     def training_step(self, batch: Dict[str, Any], batch_idx: int):
         images, targets = batch["images"], batch["targets"]
+        batch_size = len(images)
         losses: Dict[str, torch.Tensor] = self.model(images, targets)  # type: ignore
         loss = sum(losses.values())
         for k, v in losses.items():
-            self.log(f"train/{k}", v, on_step=True, on_epoch=True, prog_bar=(k == "loss_classifier"))
-        self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
+            self.log(
+                f"train/{k}",
+                v,
+                on_step=True,
+                on_epoch=True,
+                prog_bar=(k == "loss_classifier"),
+                batch_size=batch_size,
+            )
+        self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True, batch_size=batch_size)
         return loss
 
     def validation_step(self, batch: Dict[str, Any], batch_idx: int):
         images, targets = batch["images"], batch["targets"]
-        losses: Dict[str, torch.Tensor] = self.model(images, targets)  # Faster R-CNN returns losses in train mode
+        batch_size = len(images)
+
+        # Get predictions (model is in eval mode by default in validation_step)
+        with torch.no_grad():
+            predictions = self.model(images)
+
+        # Calculate loss - temporarily switch to train mode
+        self.model.train()
+        losses: Dict[str, torch.Tensor] = self.model(images, targets)
+        self.model.eval()  # Switch back to eval mode
+
         loss = sum(losses.values())
-        self.log("val/loss", loss, on_epoch=True, prog_bar=True)
-        return loss
+        self.log("val-loss", loss, on_epoch=True, prog_bar=True, batch_size=batch_size)
+
+        # Return data for visualization callback
+        # Detach and move to CPU to avoid memory leaks in the callback
+        return {
+            "images": [img.cpu() for img in images],
+            "targets": [{k: v.cpu() for k, v in t.items()} for t in targets],
+            "predictions": [{k: v.cpu() for k, v in p.items()} for p in predictions],
+        }
 
     def configure_optimizers(self):
         params = [p for p in self.model.parameters() if p.requires_grad]

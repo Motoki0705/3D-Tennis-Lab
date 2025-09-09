@@ -73,7 +73,7 @@ class CocoDetDataset(Dataset):
     def __getitem__(self, idx: int):
         img_id = self.img_ids[idx]
         img_info = self.id_to_img[img_id]
-        img_path = os.path.join(self.images_dir, img_info["file_name"])
+        img_path = os.path.join(self.images_dir, img_info["original_path"])
 
         img = cv2.imread(img_path)
         assert img is not None, f"Failed to read image: {img_path}"
@@ -82,11 +82,19 @@ class CocoDetDataset(Dataset):
         anns = self.img_to_anns.get(img_id, [])
         boxes = []
         labels = []
+        H, W = img.shape[:2]
         for a in anns:
             x, y, w, h = a["bbox"]
-            if w <= 1 or h <= 1:
+            # Clip bbox to image bounds to satisfy albumentations' pre-check
+            x1 = max(0.0, float(x))
+            y1 = max(0.0, float(y))
+            x2 = min(float(x + w), float(W))
+            y2 = min(float(y + h), float(H))
+            new_w = max(0.0, x2 - x1)
+            new_h = max(0.0, y2 - y1)
+            if new_w <= 1 or new_h <= 1:
                 continue
-            boxes.append([x, y, w, h])
+            boxes.append([x1, y1, new_w, new_h])
             labels.append(self.catid_to_label[self.target_cat_id])
 
         class_labels = labels.copy()  # for albumentations
@@ -94,6 +102,12 @@ class CocoDetDataset(Dataset):
         if self.transforms is not None:
             transformed = self.transforms(image=img, bboxes=boxes, class_labels=class_labels)
             img_t = transformed["image"]
+            # Safety: torchvision detectors expect float tensors in [0, 1]
+            if img_t.dtype != torch.float32:
+                img_t = img_t.float()
+            # If values look like 0..255, rescale to 0..1
+            if torch.isfinite(img_t).all() and img_t.max() > 1.0:
+                img_t = img_t / 255.0
             boxes = transformed["bboxes"]
             labels = transformed["class_labels"]
         else:
