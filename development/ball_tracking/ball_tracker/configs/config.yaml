@@ -1,0 +1,80 @@
+# @package _global_
+
+task: train # 'train' or 'infer'
+
+# Experiment name for logging
+experiment_name: "ball_sequence_predictor"
+
+# --- Data Config ---
+data:
+  # Path to the root directory of the images (not used for this model, but good practice)
+  images_root: ../hrnet_finetuning/data/rally_video_all_frames/
+  # Path to the annotation file
+  labeled_json: ../hrnet_finetuning/data/ball_bbox_annotations_v2.json
+
+  # Sequence parameters
+  sequence_length: 10 # Number of frames in the input sequence
+  predict_offset: 1 # Predict N frames into the future
+
+  # Splitting
+  val_ratio: 0.2
+  split_seed: 42
+
+  # Dataloader params
+  batch_size: 64
+  num_workers: 4
+
+# --- Model Config ---
+model:
+  type: lstm # lstm | gru | transformer
+  # [x, y, vx, vy, ax, ay]
+  input_dim: 6
+  hidden_dim: 128 # for lstm/gru
+  n_layers: 2
+  dropout: 0.1
+  bidirectional: false
+  # transformer-specific
+  d_model: 128
+  nhead: 4
+  dim_feedforward: 256
+  output_dim: 6 # Predicting the next state vector
+
+# --- Training Config ---
+training:
+  # Trainer settings
+  max_epochs: 100
+  accelerator: auto # auto, cpu, cuda, mps
+  devices: 1
+  precision: 32 # 16 or 32
+  gradient_clip_val: 0.5
+
+  # Optimizer
+  lr: 1e-3
+  weight_decay: 1e-5
+  betas: [0.9, 0.999]
+
+  # LR Scheduler (Cosine Annealing with Warmup)
+  warmup_epochs: 5
+  eta_min: 1e-6
+
+  # Prediction mode & losses
+  predict_mode: absolute # absolute | delta
+  consistency_loss_weight: 0.1 # physics-inspired consistency loss weight
+
+  # Loss function (currently fixed to MSE in lit_module)
+
+# --- Callbacks (placeholders) ---
+callbacks:
+  checkpoint:
+    monitor: "val/loss"
+    mode: "min"
+    save_top_k: 3
+    filename: "epoch={epoch}-valloss={val/loss:.4f}"
+
+  lr_monitor:
+    logging_interval: "epoch"
+  # early stopping (optional override by user)
+  # early_stopping:
+  #   monitor: "val/loss"
+  #   mode: "min"
+  #   patience: 10
