@@ -8,12 +8,12 @@ experiment_name: "ball_sequence_predictor"
 # --- Data Config ---
 data:
   # Path to the root directory of the images (not used for this model, but good practice)
-  images_root: ../hrnet_finetuning/data/rally_video_all_frames/
+  images_root: data/processed/ball/images
   # Path to the annotation file
-  labeled_json: ../hrnet_finetuning/data/ball_bbox_annotations_v2.json
+  labeled_json: data/processed/ball/annotation.json
 
   # Sequence parameters
-  sequence_length: 10 # Number of frames in the input sequence
+  sequence_length: 50 # Number of frames in the input sequence
   predict_offset: 1 # Predict N frames into the future
 
   # Splitting
@@ -26,7 +26,7 @@ data:
 
 # --- Model Config ---
 model:
-  type: lstm # lstm | gru | transformer
+  type: transformer # lstm | gru | transformer
   # [x, y, vx, vy, ax, ay]
   input_dim: 6
   hidden_dim: 128 # for lstm/gru
@@ -60,21 +60,39 @@ training:
   # Prediction mode & losses
   predict_mode: absolute # absolute | delta
   consistency_loss_weight: 0.1 # physics-inspired consistency loss weight
+  loss_mode: "xy_only" # "full_vector" or "xy_only"
 
   # Loss function (currently fixed to MSE in lit_module)
 
 # --- Callbacks (placeholders) ---
 callbacks:
   checkpoint:
-    monitor: "val/loss"
+    monitor: "val_loss"
     mode: "min"
     save_top_k: 3
-    filename: "epoch={epoch}-valloss={val/loss:.4f}"
+    filename: "epoch={epoch}-valloss={val_loss:.4f}"
 
   lr_monitor:
+    _target_: pytorch_lightning.callbacks.LearningRateMonitor
     logging_interval: "epoch"
+
+  visualization:
+    _target_: development.ball_tracking.ball_tracker.callbacks.visualization.VisualizationCallback
+    plot_interval: 10 # Log every N validation epochs
+    plot_samples: 5 # Number of samples to plot per visualization
   # early stopping (optional override by user)
   # early_stopping:
   #   monitor: "val/loss"
   #   mode: "min"
   #   patience: 10
+
+# --- Inference Config ---
+inference:
+  # Path to the model checkpoint (.ckpt) to load. If 'best', finds the best checkpoint automatically.
+  checkpoint_path: "best"
+  # Dataset split to use for inference ('val', 'train', or 'all')
+  dataset_split: "val"
+  # Output path for the inference results (e.g., a JSON file)
+  output_path: "outputs/inference_results.json"
+  # Number of samples to run inference on (null for all)
+  limit_samples: null
