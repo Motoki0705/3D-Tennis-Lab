@@ -14,8 +14,8 @@ experiment: "dino_faster_rcnn"
 task: "train" # train, infer, testなど
 
 # --- 実験名の自動生成 ---
-# <project>_<experiment>_<model> の形式を徹底
-experiment_name: "${project}_${experiment}_${model.name}"
+# <project>_<experiment> の形式を徹底
+experiment_name: "${project}_${experiment}"
 
 # --- Hydra自体の設定 ---
 hydra:
