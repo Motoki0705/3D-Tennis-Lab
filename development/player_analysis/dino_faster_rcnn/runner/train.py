@@ -29,6 +29,7 @@ class TrainRunner:
             image_size=self.cfg.data.image_size,
             image_size_low=self.cfg.data.get("image_size_low", None),
             image_size_high=self.cfg.data.get("image_size_high", None),
+            aspect_ratio=self.cfg.data.get("aspect_ratio", None),
         )
 
         # Model
