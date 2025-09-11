@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Tuple
+from typing import Iterable, Tuple, Optional
 
 import torch
 
@@ -36,12 +36,23 @@ def compute_feature_stats(samples: Iterable[Tuple[torch.Tensor, torch.Tensor]]) 
     return FeatureStats(mean=mean, std=std)
 
 
-class Standardizer:
-    def __init__(self, stats: FeatureStats):
-        self.stats = stats
+class Standardizer(torch.nn.Module):
+    def __init__(self, stats: Optional[FeatureStats]):
+        super().__init__()
+        self.has_stats = stats is not None
+        if self.has_stats:
+            self.register_buffer("mean", stats.mean)
+            self.register_buffer("std", stats.std)
+        else:
+            self.register_buffer("mean", torch.tensor([]))
+            self.register_buffer("std", torch.tensor([]))
 
     def normalize(self, x: torch.Tensor) -> torch.Tensor:
-        return (x - self.stats.mean) / (self.stats.std + 1e-6)
+        if not self.has_stats:
+            return x
+        return (x - self.mean) / (self.std + 1e-6)
 
     def denormalize(self, x: torch.Tensor) -> torch.Tensor:
-        return x * (self.stats.std + 1e-6) + self.stats.mean
+        if not self.has_stats:
+            return x
+        return x * (self.std + 1e-6) + self.mean

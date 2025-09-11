@@ -12,9 +12,10 @@ def _dispatch(task: Literal["train", "infer"], cfg: DictConfig):
         from .runner.train import TrainRunner
 
         TrainRunner(cfg).run()
-    # elif task == "infer":
-    #     from .runner.infer import InferRunner
-    #     InferRunner(cfg).run()
+    elif task == "infer":
+        from .runner.infer import InferRunner
+
+        InferRunner(cfg).run()
     else:
         raise ValueError(f"Unknown task: {task}")
 

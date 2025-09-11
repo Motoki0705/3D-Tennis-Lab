@@ -5,9 +5,10 @@ import os
 from typing import Any
 
 import pytorch_lightning as pl
+import hydra
 from hydra.utils import to_absolute_path as abspath
 from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
 from .base_runner import BaseRunner
@@ -50,26 +51,22 @@ class TrainRunner(BaseRunner):
         exp_name = self.cfg.get("experiment_name", "ball_tracker_exp")
         logger_tb = TensorBoardLogger(save_dir=abspath("tb_logs"), name=exp_name)
 
-        ckpt_dir = os.path.join(logger_tb.log_dir, "checkpoints")
-        cb_cfg = self.cfg.get("callbacks", {})
-        checkpoint_cb = ModelCheckpoint(
-            dirpath=ckpt_dir,
-            monitor=cb_cfg.checkpoint.monitor,
-            mode=cb_cfg.checkpoint.mode,
-            save_top_k=cb_cfg.checkpoint.save_top_k,
-            filename=cb_cfg.checkpoint.filename,
-        )
-        lr_monitor_cb = LearningRateMonitor(logging_interval=cb_cfg.lr_monitor.logging_interval)
-        callbacks = [checkpoint_cb, lr_monitor_cb]
-        es_cfg = getattr(cb_cfg, "early_stopping", None)
-        if es_cfg is not None:
-            callbacks.append(
-                EarlyStopping(
-                    monitor=es_cfg.monitor,
-                    mode=es_cfg.mode,
-                    patience=int(es_cfg.patience),
-                )
-            )
+        # Instantiate callbacks
+        callbacks: list[pl.Callback] = []
+        cb_cfg = self.cfg.get("callbacks")
+        if cb_cfg:
+            # Handle callbacks that need special instantiation or have no _target_
+            if "checkpoint" in cb_cfg:
+                ckpt_dir = os.path.join(logger_tb.log_dir, "checkpoints")
+                callbacks.append(ModelCheckpoint(dirpath=ckpt_dir, filename=cb_cfg.checkpoint.filename))
+
+            if "early_stopping" in cb_cfg:
+                callbacks.append(EarlyStopping(**cb_cfg.early_stopping))
+
+            # Instantiate all other callbacks from config via hydra
+            for name, cb_conf in cb_cfg.items():
+                if name not in ["checkpoint", "early_stopping"] and "_target_" in cb_conf:
+                    callbacks.append(hydra.utils.instantiate(cb_conf))
 
         # 4) Trainer
         tcfg = self.cfg.training
@@ -87,6 +84,3 @@ class TrainRunner(BaseRunner):
         logger.info("Starting training...")
         trainer.fit(lit_module, datamodule=datamodule)
         logger.info("Training finished.")
-
-
-# Add a BaseRunner to runner folder to be compliant with the architecture

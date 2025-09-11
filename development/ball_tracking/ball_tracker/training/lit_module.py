@@ -28,9 +28,10 @@ class SequenceLitModule(pl.LightningModule):
         self.model = build_sequence_model(self.cfg)
         self.criterion = nn.MSELoss()
 
-        self.standardizer = Standardizer(feature_stats) if feature_stats is not None else None
+        self.standardizer = Standardizer(feature_stats)
         # Loss weights
         self.lambda_consistency = float(getattr(self.cfg.training, "consistency_loss_weight", 0.0))
+        self.loss_mode = getattr(self.cfg.training, "loss_mode", "full_vector").lower()  # 'full_vector'|'xy_only'
         self.predict_mode = getattr(self.cfg.training, "predict_mode", "absolute").lower()  # 'absolute'|'delta'
 
     def forward(self, x: torch.Tensor) -> Any:
@@ -78,7 +79,11 @@ class SequenceLitModule(pl.LightningModule):
     def training_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
         input_seq, target_vec = _select_io(batch)
         pred_vec, tgt, last_state = self._prepare(input_seq, target_vec)
-        loss_main = self.criterion(pred_vec, tgt)
+        # Calculate main loss based on the loss_mode
+        if self.loss_mode == "xy_only":
+            loss_main = self.criterion(pred_vec[:, :2], tgt[:, :2])
+        else:  # "full_vector" or default
+            loss_main = self.criterion(pred_vec, tgt)
         loss_cons = self._consistency_loss(pred_vec, last_state) if self.lambda_consistency > 0 else 0.0
         loss = loss_main + self.lambda_consistency * loss_cons
         self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
@@ -90,15 +95,37 @@ class SequenceLitModule(pl.LightningModule):
     def validation_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
         input_seq, target_vec = _select_io(batch)
         pred_vec, tgt, last_state = self._prepare(input_seq, target_vec)
-        loss_main = self.criterion(pred_vec, tgt)
+        # Calculate main loss based on the loss_mode
+        if self.loss_mode == "xy_only":
+            loss_main = self.criterion(pred_vec[:, :2], tgt[:, :2])
+        else:  # "full_vector" or default
+            loss_main = self.criterion(pred_vec, tgt)
         loss_cons = self._consistency_loss(pred_vec, last_state) if self.lambda_consistency > 0 else 0.0
         loss = loss_main + self.lambda_consistency * loss_cons
-        self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         # Metrics (MAE per component)
         mae = (pred_vec - tgt).abs().mean(dim=0)
         for i, name in enumerate(["x", "y", "vx", "vy", "ax", "ay"][: pred_vec.size(-1)]):
             self.log(f"val/mae_{name}", mae[i], on_epoch=True)
         return loss
+
+    def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> dict:
+        input_seq, target_vec = _select_io(batch)
+
+        # Get model prediction in normalized space
+        pred_vec_norm, _, _ = self._prepare(input_seq, target_vec)
+
+        # Denormalize only the prediction
+        if self.standardizer and self.standardizer.has_stats:
+            pred_vec_denorm = self.standardizer.denormalize(pred_vec_norm)
+        else:
+            pred_vec_denorm = pred_vec_norm
+
+        return {
+            "input_sequence": input_seq.cpu().numpy().tolist(),
+            "ground_truth": target_vec.cpu().numpy().tolist(),
+            "prediction": pred_vec_denorm.cpu().numpy().tolist(),
+        }
 
     def configure_optimizers(self):
         cfg_train = self.cfg.training
@@ -133,6 +160,6 @@ class SequenceLitModule(pl.LightningModule):
                 "scheduler": scheduler,
                 "interval": "epoch",
                 "frequency": 1,
-                "monitor": "val/loss",
+                "monitor": "val_loss",
             },
         }
