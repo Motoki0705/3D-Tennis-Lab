@@ -10,8 +10,8 @@ backbone:
 num_classes: 2 # e.g., 1 class (player) + background handled internally by torchvision
 image_mean: [0.485, 0.456, 0.406]
 image_std: [0.229, 0.224, 0.225]
-min_size: 640
-max_size: 1280
+min_size: 320
+max_size: 1024
 box_score_thresh: 0.05
 box_nms_thresh: 0.5
 box_detections_per_img: 100
