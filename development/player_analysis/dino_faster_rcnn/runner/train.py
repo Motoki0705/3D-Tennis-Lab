@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import hydra
 import pytorch_lightning as pl
 from omegaconf import DictConfig
 from pytorch_lightning.loggers import TensorBoardLogger
 
+from ..callbacks.builder import build_callbacks
 from ..training.datamodule import DetectionDataModule
 from ..training.lit_module import DetectionLitModule
 from ..model.dino_faster_rcnn import DinoFasterRCNN
@@ -33,8 +33,8 @@ class TrainRunner:
         model = DinoFasterRCNN(**self.cfg.model)
         lit = DetectionLitModule(model=model, lr=self.cfg.lit_module.lr, weight_decay=self.cfg.lit_module.weight_decay)
 
-        # Instantiate callbacks from config
-        callbacks = list(hydra.utils.instantiate(self.cfg.callbacks).values())
+        # Instantiate callbacks from our build system
+        callbacks = build_callbacks(self.cfg.callbacks)
 
         logger = TensorBoardLogger(**self.cfg.logger)
 

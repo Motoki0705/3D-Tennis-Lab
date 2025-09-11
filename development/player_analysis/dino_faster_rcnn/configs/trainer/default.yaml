@@ -7,6 +7,3 @@ val_check_interval: 0.5
 num_sanity_val_steps: 0
 gradient_clip_val: 0.0
 detect_anomaly: false
-
-checkpoint_dir: ${work_dir}/checkpoints
-default_root_dir: ${work_dir}
