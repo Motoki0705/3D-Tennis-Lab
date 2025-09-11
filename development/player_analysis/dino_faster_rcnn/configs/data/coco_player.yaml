@@ -1,0 +1,32 @@
+batch_size: 4
+num_workers: 4
+pin_memory: true
+
+train:
+  images: data/processed/ball/images  # directory with images
+  ann: data/processed/ball/annotation.json  # COCO-format annotations with ball & player
+
+val:
+  images: null  # if null, uses train paths
+  ann: null
+
+test:
+  images: null
+  ann: null
+
+class_names: ["player"]
+
+image_size: 1024  # square resize on long edge
+# Optional: mix two resolutions during training (set both to enable)
+image_size_low: 640
+image_size_high: 1024
+
+# Optional: fix the final canvas aspect ratio (width/height).
+# - Use a float (e.g., 1.0 for square, 1.7778 for 16:9)
+#   or a string "W:H" (e.g., "16:9", "4:3").
+# - If null, keeps square (image_size x image_size).
+aspect_ratio: "2:1"
+
+# Dataset filtering parameters (documented; dataset defaults match these)
+target_category: "player"
+required_instances_per_image: 2

@@ -1,0 +1,29 @@
+defaults:
+  - model: dino_faster_rcnn
+  - data: coco_player
+  - training: default
+  - callbacks: default
+  - _self_
+
+seed: 42
+
+# --- グローバル設定 ---
+project: "player_analysis"
+# `development/<project>/<experiment>` のディレクトリ名と対応させる
+experiment: "dino_faster_rcnn"
+task: "train" # train, infer, testなど
+
+# --- 実験名の自動生成 ---
+# <project>_<experiment> の形式を徹底
+experiment_name: "${project}_${experiment}"
+
+# --- Hydra自体の設定 ---
+hydra:
+  run:
+    dir: outputs/${experiment_name}/${now:%Y-%m-%d_%H-%M-%S}
+
+# --- Logger設定 ---
+# loggerセクションは残す場合、experiment_nameを参照するように変更を推奨
+logger:
+  save_dir: "tb_logs"
+  name: "${experiment_name}"
