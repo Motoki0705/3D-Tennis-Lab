@@ -20,3 +20,11 @@ Notes
 
 - This project uses the DINOv3 third_party repo as a local torch.hub to load ViT.
 - ViT is frozen; only Faster R-CNN heads are trained.
+
+Resolution Mix Scheduling
+
+- You can reduce early-epoch cost by mixing low/high image resolutions during training.
+- Enable by setting `data.image_size_low` and `data.image_size_high` in the data config.
+- The `resolution_mix_scheduler` callback linearly increases the probability of sampling
+  high-resolution transforms from 0.0 to 1.0 over the training epochs (configurable).
+- Dataloaders are reloaded every epoch so workers pick up updated mix ratios.
