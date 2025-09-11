@@ -25,7 +25,7 @@ image_size_high: 1024
 # - Use a float (e.g., 1.0 for square, 1.7778 for 16:9)
 #   or a string "W:H" (e.g., "16:9", "4:3").
 # - If null, keeps square (image_size x image_size).
-aspect_ratio: null
+aspect_ratio: "2:1"
 
 # Dataset filtering parameters (documented; dataset defaults match these)
 target_category: "player"

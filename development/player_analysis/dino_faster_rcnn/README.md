@@ -14,7 +14,7 @@ Config pointers (see configs/):
 - `model.backbone.{repo_dir, entry, weights}`: local hub path, entry, and weights
 - `model.num_classes`: number of foreground classes (incl. background handled internally)
 - `data.train/images, data.train/ann`: COCO-style dataset paths
-- `trainer.max_epochs, trainer.devices`: training settings
+- `training.max_epochs, training.devices`: training settings
 
 Notes
 
