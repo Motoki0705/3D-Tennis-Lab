@@ -34,26 +34,41 @@ class TrainRunner:
 
         # Model
         model = DinoFasterRCNN(**self.cfg.model)
-        lit = DetectionLitModule(model=model, lr=self.cfg.lit_module.lr, weight_decay=self.cfg.lit_module.weight_decay)
+        # Optimizer/Scheduler config come from training config group
+        optim_cfg = self.cfg.training.get("optimizer", {}) if hasattr(self.cfg, "training") else {}
+        sched_cfg = self.cfg.training.get("lr_scheduler", {}) if hasattr(self.cfg, "training") else {}
+        # Backward compatibility: allow lr/weight_decay in lit_module if present
+        lr = optim_cfg.get("lr", self.cfg.get("lit_module", {}).get("lr", 1e-4))
+        weight_decay = optim_cfg.get("weight_decay", self.cfg.get("lit_module", {}).get("weight_decay", 1e-4))
+
+        lit = DetectionLitModule(
+            model=model,
+            lr=lr,
+            weight_decay=weight_decay,
+            optimizer_cfg=optim_cfg,
+            lr_scheduler_cfg=sched_cfg,
+        )
 
         # Instantiate callbacks from our build system
         callbacks = build_callbacks(self.cfg.callbacks)
 
         logger = TensorBoardLogger(**self.cfg.logger)
 
+        tr = self.cfg.training
         trainer = pl.Trainer(
-            accelerator=self.cfg.trainer.accelerator,
-            devices=self.cfg.trainer.devices,
-            precision=self.cfg.trainer.precision,
-            max_epochs=self.cfg.trainer.max_epochs,
-            default_root_dir=self.cfg.trainer.default_root_dir,
-            log_every_n_steps=self.cfg.trainer.log_every_n_steps,
-            val_check_interval=self.cfg.trainer.val_check_interval,
-            num_sanity_val_steps=self.cfg.trainer.num_sanity_val_steps,
-            gradient_clip_val=self.cfg.trainer.gradient_clip_val,
-            detect_anomaly=self.cfg.trainer.detect_anomaly,
+            accelerator=tr.accelerator,
+            devices=tr.devices,
+            precision=tr.precision,
+            max_epochs=tr.max_epochs,
+            default_root_dir=getattr(tr, "default_root_dir", None),
+            log_every_n_steps=tr.log_every_n_steps,
+            val_check_interval=tr.val_check_interval,
+            num_sanity_val_steps=tr.num_sanity_val_steps,
+            gradient_clip_val=tr.gradient_clip_val,
+            detect_anomaly=tr.detect_anomaly,
             callbacks=callbacks,
             logger=logger,
+            reload_dataloaders_every_n_epochs=getattr(tr, "reload_dataloaders_every_n_epochs", 0),
         )
 
         trainer.fit(lit, datamodule=dm)

@@ -1,0 +1,27 @@
+accelerator: gpu
+devices: 1
+precision: 32
+max_epochs: 12
+log_every_n_steps: 50
+val_check_interval: 0.5
+num_sanity_val_steps: 0
+gradient_clip_val: 0.0
+detect_anomaly: false
+reload_dataloaders_every_n_epochs: 1
+
+# Optimizer settings (consumed by DetectionLitModule)
+optimizer:
+  name: adamw
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
+  betas: [0.9, 0.999]
+  eps: 1.0e-08
+
+# Learning rate scheduler (warmup + cosine)
+lr_scheduler:
+  name: cosine_warmup
+  interval: epoch # step or epoch
+  warmup_epochs: 1
+  warmup_start_lr: 1.0e-7
+  min_lr: 0.0
+  max_epochs: ${training.max_epochs}

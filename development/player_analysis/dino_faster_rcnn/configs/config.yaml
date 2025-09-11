@@ -1,7 +1,7 @@
 defaults:
   - model: dino_faster_rcnn
   - data: coco_player
-  - trainer: default
+  - training: default
   - callbacks: default
   - _self_
 
