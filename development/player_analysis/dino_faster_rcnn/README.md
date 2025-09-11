@@ -28,3 +28,10 @@ Resolution Mix Scheduling
 - The `resolution_mix_scheduler` callback linearly increases the probability of sampling
   high-resolution transforms from 0.0 to 1.0 over the training epochs (configurable).
 - Dataloaders are reloaded every epoch so workers pick up updated mix ratios.
+
+Fixed Aspect Ratio
+
+- You can force a fixed output aspect ratio via `data.aspect_ratio`.
+- Accepts a float (W/H) like `1.0`, `1.7778`, or a string like `"16:9"`.
+- The pipeline rescales to the specified long edge (`data.image_size`) and letterboxes to `(target_w, target_h)`
+  so that width/height equals the configured ratio. Bounding boxes are adjusted by Albumentations.

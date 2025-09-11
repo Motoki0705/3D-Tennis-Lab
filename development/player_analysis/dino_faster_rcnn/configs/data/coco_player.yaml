@@ -21,6 +21,12 @@ image_size: 1024  # square resize on long edge
 image_size_low: 640
 image_size_high: 1024
 
+# Optional: fix the final canvas aspect ratio (width/height).
+# - Use a float (e.g., 1.0 for square, 1.7778 for 16:9)
+#   or a string "W:H" (e.g., "16:9", "4:3").
+# - If null, keeps square (image_size x image_size).
+aspect_ratio: null
+
 # Dataset filtering parameters (documented; dataset defaults match these)
 target_category: "player"
 required_instances_per_image: 2

@@ -22,6 +22,7 @@ class DetectionDataModule(pl.LightningDataModule):
         image_size: int = 1024,
         image_size_low: Optional[int] = None,
         image_size_high: Optional[int] = None,
+        aspect_ratio: Optional[float | str] = None,
     ):
         super().__init__()
         self.train_images = train_images
@@ -37,15 +38,44 @@ class DetectionDataModule(pl.LightningDataModule):
 
         # Will be assigned in setup
         self._train_transform = None
+        self._aspect_ratio = self._parse_aspect_ratio(aspect_ratio)
+
+    @staticmethod
+    def _parse_aspect_ratio(value: Optional[float | str]) -> Optional[float]:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value) if value > 0 else None
+        if isinstance(value, str):
+            s = value.strip()
+            if ":" in s:
+                try:
+                    w, h = s.split(":", 1)
+                    w = float(w)
+                    h = float(h)
+                    if w > 0 and h > 0:
+                        return w / h
+                except Exception:
+                    return None
+            else:
+                try:
+                    f = float(s)
+                    return f if f > 0 else None
+                except Exception:
+                    return None
+        return None
 
     def setup(self, stage: Optional[str] = None):
         # Build training transforms: either mixed-resolution or single-size
         if self.image_size_low is not None and self.image_size_high is not None:
             self._train_transform = ResolutionMixTransform(
-                low_size=self.image_size_low, high_size=self.image_size_high, p_high=0.0
+                low_size=self.image_size_low,
+                high_size=self.image_size_high,
+                p_high=0.0,
+                aspect_ratio=self._aspect_ratio,
             )
         else:
-            self._train_transform = get_train_transforms(self.image_size)
+            self._train_transform = get_train_transforms(self.image_size, aspect_ratio=self._aspect_ratio)
 
         self.train_ds = CocoDetDataset(
             self.train_images,
@@ -57,7 +87,7 @@ class DetectionDataModule(pl.LightningDataModule):
         self.val_ds = CocoDetDataset(
             self.val_images,
             self.val_ann,
-            transforms=get_val_transforms(self.image_size),
+            transforms=get_val_transforms(self.image_size, aspect_ratio=self._aspect_ratio),
             target_category="player",
             required_instances_per_image=2,
         )
