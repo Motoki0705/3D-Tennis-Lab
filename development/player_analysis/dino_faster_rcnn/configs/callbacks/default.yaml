@@ -1,8 +1,10 @@
 visualization:
+  _target_: development.player_analysis.dino_faster_rcnn.callbacks.detection_visualizer.DetectionVisualizer
   num_samples: 4
   score_threshold: 0.5
 
 model_checkpoint:
+  _target_: pytorch_lightning.callbacks.ModelCheckpoint
   dirpath: "${hydra:runtime.output_dir}/checkpoints"
   filename: "epoch={epoch}-val-loss={val-loss:.3f}"
   monitor: "val-loss"
@@ -11,9 +13,11 @@ model_checkpoint:
   save_last: True
 
 lr_monitor:
+  _target_: pytorch_lightning.callbacks.LearningRateMonitor
   logging_interval: "step"
 
 early_stopping:
+  _target_: pytorch_lightning.callbacks.EarlyStopping
   monitor: "val-loss"
   patience: 5
   mode: "min"
