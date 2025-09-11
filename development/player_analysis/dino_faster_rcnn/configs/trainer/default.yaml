@@ -7,3 +7,4 @@ val_check_interval: 0.5
 num_sanity_val_steps: 0
 gradient_clip_val: 0.0
 detect_anomaly: false
+reload_dataloaders_every_n_epochs: 1

@@ -21,3 +21,12 @@ early_stopping:
   monitor: "val-loss"
   patience: 5
   mode: "min"
+
+# スケジュール: 低解像度 -> 高解像度の混合比を線形に増加
+resolution_mix_scheduler:
+  _target_: development.player_analysis.dino_faster_rcnn.callbacks.resolution_scheduler.ResolutionMixScheduler
+  start_epoch: 0
+  end_epoch: ${trainer.max_epochs}
+  start_p_high: 0.0
+  end_p_high: 1.0
+  log: true

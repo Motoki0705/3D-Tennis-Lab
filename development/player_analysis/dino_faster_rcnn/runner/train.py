@@ -27,6 +27,8 @@ class TrainRunner:
             num_workers=self.cfg.data.num_workers,
             pin_memory=self.cfg.data.pin_memory,
             image_size=self.cfg.data.image_size,
+            image_size_low=self.cfg.data.get("image_size_low", None),
+            image_size_high=self.cfg.data.get("image_size_high", None),
         )
 
         # Model
