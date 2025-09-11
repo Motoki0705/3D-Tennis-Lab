@@ -1,24 +1,29 @@
-# Top-level task selector
-task: train # train | infer
-
 defaults:
   - model: dino_faster_rcnn
-  - data: coco_paths
+  - data: coco_player
   - trainer: default
   - callbacks: default
   - _self_
 
 seed: 42
 
-work_dir: ${hydra:runtime.output_dir}
-exp_name: dino_faster_rcnn_baseline
+# --- グローバル設定 ---
+project: "player_analysis"
+# `development/<project>/<experiment>` のディレクトリ名と対応させる
+experiment: "dino_faster_rcnn"
+task: "train" # train, infer, testなど
 
-# Callbacks will be instantiated from the `callbacks` group
-callbacks:
-  _target_: hydra.utils.instantiate
-  _recursive_: false
+# --- 実験名の自動生成 ---
+# <project>_<experiment>_<model> の形式を徹底
+experiment_name: "${project}_${experiment}_${model.name}"
 
+# --- Hydra自体の設定 ---
+hydra:
+  run:
+    dir: outputs/${experiment_name}/${now:%Y-%m-%d_%H-%M-%S}
+
+# --- Logger設定 ---
+# loggerセクションは残す場合、experiment_nameを参照するように変更を推奨
 logger:
   save_dir: "tb_logs"
-  name: "${exp_name}"
-  version: "${now:%Y-%m-%d_%H-%M-%S}"
+  name: "${experiment_name}"

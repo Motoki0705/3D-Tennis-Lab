@@ -1,4 +1,0 @@
-visualization:
-  _target_: development.player_analysis.dino_faster_rcnn.callbacks.visualization.DetectionVisualizer
-  num_samples: 4
-  score_threshold: 0.5
