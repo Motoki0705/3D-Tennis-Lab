@@ -21,12 +21,12 @@
 
 ## 3. フェーズ2: 新規学習パイプラインの実装
 
-既存のアーキテクチャガイドに準拠し、`development/player_analysis/`内に以下のコンポーネントを**新規追加**します。
+既存のアーキテクチャガイドに準拠し、`development/player_analysis/sequential_dino`内に以下のコンポーネントを**新規追加**します。
 
 ### 3.1. 提案ファイル構造
 
 ```
-development/player_analysis/
+development/player_analysis/sequential_dino
 ├── model/
 │   └── lstm_player_pose.py       # (新規追加)
 ├── training/
