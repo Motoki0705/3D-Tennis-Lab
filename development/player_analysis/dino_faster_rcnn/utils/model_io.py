@@ -47,7 +47,47 @@ def load_checkpoint_into_model(model: torch.nn.Module, ckpt_path: str) -> bool:
         print(f"[model_io] Checkpoint not found: {ckpt_path}")
         return False
 
-    ckpt = torch.load(ckpt_path, map_location="cpu")
+    # Robust loading across PyTorch versions (2.6 default weights_only=True) and
+    # allowlisting OmegaConf objects commonly stored in Lightning checkpoints.
+    ckpt = None
+    tried = []
+    # Attempt safe load with weights_only=True and safe_globals allowlist
+    try:
+        try:
+            from torch.serialization import safe_globals as _safe_globals  # type: ignore
+        except Exception:
+            _safe_globals = None  # type: ignore
+        allow = []
+        try:
+            import omegaconf
+
+            allow = [
+                getattr(omegaconf.dictconfig, "DictConfig", None),
+                getattr(omegaconf.listconfig, "ListConfig", None),
+            ]
+            allow = [a for a in allow if a is not None]
+        except Exception:
+            allow = []
+
+        if _safe_globals is not None and allow:
+            with _safe_globals(allow):
+                ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
+                tried.append("weights_only=True + safe_globals")
+        else:
+            ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
+            tried.append("weights_only=True")
+    except Exception as e:
+        # Fallback: try without weights_only flag (older PyTorch)
+        try:
+            ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+            tried.append("weights_only=False")
+        except TypeError:
+            # Very old versions without the flag
+            ckpt = torch.load(ckpt_path, map_location="cpu")
+            tried.append("no-flag")
+        except Exception as e2:
+            print(f"[model_io] torch.load failed: {e2}")
+            return False
     state: Dict[str, Any]
     if isinstance(ckpt, dict) and "state_dict" in ckpt and isinstance(ckpt["state_dict"], dict):
         state = ckpt["state_dict"]
