@@ -8,6 +8,7 @@ from ..callbacks.builder import build_callbacks
 from ..training.datamodule import DetectionDataModule
 from ..training.lit_module import DetectionLitModule
 from ..model.dino_faster_rcnn import DinoFasterRCNN
+from ..utils.model_io import load_checkpoint_into_model
 
 
 class TrainRunner:
@@ -30,10 +31,17 @@ class TrainRunner:
             image_size_low=self.cfg.data.get("image_size_low", None),
             image_size_high=self.cfg.data.get("image_size_high", None),
             aspect_ratio=self.cfg.data.get("aspect_ratio", None),
+            target_category=self.cfg.data.get("target_category", "player"),
+            required_instances_per_image=self.cfg.data.get("required_instances_per_image", 2),
+            splits=self.cfg.data.get("splits", None),
         )
 
         # Model
         model = DinoFasterRCNN(**self.cfg.model)
+        # Optionally initialize from a checkpoint (weights only)
+        ckpt_path = self.cfg.get("ckpt_path", None)
+        if ckpt_path:
+            load_checkpoint_into_model(model, ckpt_path)
         # Optimizer/Scheduler config come from training config group
         optim_cfg = self.cfg.training.get("optimizer", {}) if hasattr(self.cfg, "training") else {}
         sched_cfg = self.cfg.training.get("lr_scheduler", {}) if hasattr(self.cfg, "training") else {}

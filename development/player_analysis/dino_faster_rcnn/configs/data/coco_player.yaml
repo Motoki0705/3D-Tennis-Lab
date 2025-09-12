@@ -1,4 +1,4 @@
-batch_size: 4
+batch_size: 8
 num_workers: 4
 pin_memory: true
 
@@ -30,3 +30,11 @@ aspect_ratio: "2:1"
 # Dataset filtering parameters (documented; dataset defaults match these)
 target_category: "player"
 required_instances_per_image: 2
+
+# Single-annotation split (optional). If set, the datamodule will split
+# the images from the single COCO file into train/val/test by image-id.
+splits:
+  train: 0.8
+  val: 0.15
+  test: 0.05
+  seed: 42

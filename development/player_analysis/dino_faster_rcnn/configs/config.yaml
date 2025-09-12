@@ -2,6 +2,7 @@ defaults:
   - model: dino_faster_rcnn
   - data: coco_player
   - training: default
+  - infer: default
   - callbacks: default
   - _self_
 
@@ -27,3 +28,6 @@ hydra:
 logger:
   save_dir: "tb_logs"
   name: "${experiment_name}"
+
+# Optional: path to a trained checkpoint to initialize weights for train/infer
+ckpt_path: outputs/player_analysis_dino_faster_rcnn/2025-09-12_12-46-53/checkpoints/last.ckpt

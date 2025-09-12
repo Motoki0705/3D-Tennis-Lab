@@ -61,6 +61,21 @@ def get_val_transforms(image_size: int = 1024, aspect_ratio: Optional[float] = N
     )
 
 
+def get_infer_transforms(image_size: int = 1024, aspect_ratio: Optional[float] = None) -> A.BasicTransform:
+    """Transforms for inference (no bbox params required).
+
+    Resizes by long edge and pads to a fixed canvas that matches the desired aspect ratio,
+    then converts to tensor in [0, 1].
+    """
+    target_w, target_h = _compute_target_dims(image_size, aspect_ratio)
+    return A.Compose([
+        A.LongestMaxSize(max_size=image_size),
+        A.PadIfNeeded(min_height=target_h, min_width=target_w, border_mode=0, value=0),
+        A.ToFloat(max_value=255.0),
+        ToTensorV2(),
+    ])
+
+
 @dataclass
 class ResolutionMixConfig:
     low_size: int
