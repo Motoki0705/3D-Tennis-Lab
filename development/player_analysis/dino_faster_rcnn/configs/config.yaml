@@ -30,4 +30,4 @@ logger:
   name: "${experiment_name}"
 
 # Optional: path to a trained checkpoint to initialize weights for train/infer
-ckpt_path: null
+ckpt_path: outputs/player_analysis_dino_faster_rcnn/2025-09-12_12-46-53/checkpoints/last.ckpt

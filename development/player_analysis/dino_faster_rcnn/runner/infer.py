@@ -31,7 +31,7 @@ class InferRunner:
             return
 
         # Fallback: single-image inference via cfg.data.test.images
-        img_path = self.cfg.data.test.images
+        img_path = self.cfg.infer.image.input
         if not img_path:
             print("No test image (data.test.images) or video (infer.video.input). Inference runner exiting.")
             return

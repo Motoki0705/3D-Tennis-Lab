@@ -1,17 +1,16 @@
-infer:
-  mode: video # video or image
-  device: auto # auto|cpu|cuda|cuda:0
-  precision: fp32 # fp32|fp16
-  video:
-    input: null # path to input video
-    output: ${hydra:runtime.output_dir}/inference.mp4
-    stride: 1 # process every Nth frame
-    batch_size: 1 # number of frames per forward pass
-    score_threshold: 0.5
-    draw_labels: true
-    thickness: 2
-  image:
-    input: null
-    output: ${hydra:runtime.output_dir}/inference.jpg
-    score_threshold: 0.5
-    draw_labels: true
+mode: video # video or image
+device: auto # auto|cpu|cuda|cuda:0
+precision: fp16 # fp32|fp16
+video:
+  input: data/samples/test.mp4 # path to input video
+  output: ${hydra:runtime.output_dir}/inference.mp4
+  stride: 1 # process every Nth frame
+  batch_size: 16 # number of frames per forward pass
+  score_threshold: 0.5
+  draw_labels: true
+  thickness: 2
+image:
+  input: null
+  output: ${hydra:runtime.output_dir}/inference.jpg
+  score_threshold: 0.5
+  draw_labels: true
