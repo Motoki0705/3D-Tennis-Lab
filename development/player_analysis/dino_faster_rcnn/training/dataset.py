@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Iterable
 
 import cv2
 import torch
@@ -20,10 +20,13 @@ class CocoDetDataset(Dataset):
     def __init__(
         self,
         images_dir: str,
-        ann_file: str,
+        ann_file: Optional[str] = None,
         transforms=None,
         target_category: str = "player",
         required_instances_per_image: int = 2,
+        *,
+        coco: Optional[Dict[str, Any]] = None,
+        image_id_subset: Optional[Iterable[int]] = None,
     ):
         self.images_dir = images_dir
         self.ann_file = ann_file
@@ -31,8 +34,12 @@ class CocoDetDataset(Dataset):
         self.target_category = target_category
         self.required_instances_per_image = required_instances_per_image
 
-        with open(ann_file, "r", encoding="utf-8") as f:
-            coco = json.load(f)
+        if coco is None:
+            assert ann_file is not None, "Either 'ann_file' or preloaded 'coco' dict must be provided."
+            with open(ann_file, "r", encoding="utf-8") as f:
+                coco = json.load(f)
+        # keep a reference for potential reuse
+        self._coco = coco
 
         # Resolve target category id(s)
         cat_name_to_id = {c.get("name"): c.get("id") for c in coco.get("categories", [])}
@@ -62,7 +69,13 @@ class CocoDetDataset(Dataset):
             if len(anns) == self.required_instances_per_image:
                 self.img_to_anns[img_id] = anns
 
-        self.img_ids = list(self.img_to_anns.keys())
+        # Allow subsetting by a predefined list of image ids
+        all_ids = list(self.img_to_anns.keys())
+        if image_id_subset is not None:
+            subset_set = set(int(i) for i in image_id_subset)
+            self.img_ids = [i for i in all_ids if i in subset_set]
+        else:
+            self.img_ids = all_ids
 
         # Mapping for category ids to contiguous labels 1..K (only target -> 1)
         self.catid_to_label = {self.target_cat_id: 1}  # 0 is background in torchvision

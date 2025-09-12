@@ -30,6 +30,9 @@ class TrainRunner:
             image_size_low=self.cfg.data.get("image_size_low", None),
             image_size_high=self.cfg.data.get("image_size_high", None),
             aspect_ratio=self.cfg.data.get("aspect_ratio", None),
+            target_category=self.cfg.data.get("target_category", "player"),
+            required_instances_per_image=self.cfg.data.get("required_instances_per_image", 2),
+            splits=self.cfg.data.get("splits", None),
         )
 
         # Model

@@ -14,6 +14,8 @@ Config pointers (see configs/):
 - `model.backbone.{repo_dir, entry, weights}`: local hub path, entry, and weights
 - `model.num_classes`: number of foreground classes (incl. background handled internally)
 - `data.train/images, data.train/ann`: COCO-style dataset paths
+- You can provide a single COCO annotation file and enable `data.splits` to
+  deterministically split by image id into train/val/test without writing new files.
 - `training.max_epochs, training.devices`: training settings
 
 Notes
