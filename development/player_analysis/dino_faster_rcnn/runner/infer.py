@@ -2,11 +2,12 @@ from __future__ import annotations
 
 
 from typing import List, Optional
+from contextlib import nullcontext
 
 import torch
 from omegaconf import DictConfig
 
-from ..model.dino_faster_rcnn import DinoFasterRCNN
+from ..utils.model_io import build_model_from_cfg
 from ..training.transforms import get_infer_transforms, _compute_target_dims
 
 
@@ -16,8 +17,12 @@ class InferRunner:
 
     @torch.no_grad()
     def run(self):
-        model = DinoFasterRCNN(**self.cfg.model)
+        model = build_model_from_cfg(self.cfg)
         model.eval()
+        # Device/precision setup
+        device = self._get_device()
+        model.to(device)
+        amp_ctx = self._get_amp_context(device)
 
         # Prefer video inference if configured
         infer_cfg = getattr(self.cfg, "infer", None)
@@ -42,8 +47,9 @@ class InferRunner:
         assert bgr is not None, f"Failed to read: {img_path}"
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
-        tx = tfm(image=rgb)["image"]  # tensor CHW in [0,1]
-        outputs = model([tx])  # type: ignore
+        tx = tfm(image=rgb)["image"].to(device)  # tensor CHW in [0,1]
+        with amp_ctx:
+            outputs = model([tx])  # type: ignore
 
         # Draw and save
         preds = outputs[0]
@@ -59,7 +65,7 @@ class InferRunner:
             labels = labels[mask]
 
         # to uint8
-        img_uint8 = (tx.clamp(0, 1) * 255).to(torch.uint8)
+        img_uint8 = (tx.detach().cpu().clamp(0, 1) * 255).to(torch.uint8)
         label_strs = [f"{int(l.item())}:{float(s):.2f}" for l, s in zip(labels, scores)] if labels is not None else None
         drawn = torchvision.utils.draw_bounding_boxes(img_uint8, boxes=boxes, labels=label_strs, colors="red", width=2)
         out_path = infer_cfg.get("image", {}).get("output", None) if infer_cfg else None
@@ -101,6 +107,9 @@ class InferRunner:
         frame_idx = 0
         written = 0
 
+        device = self._get_device()
+        amp_ctx = self._get_amp_context(device)
+
         while True:
             ok, bgr = cap.read()
             if not ok:
@@ -111,18 +120,20 @@ class InferRunner:
                 continue
 
             rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-            tx = tfm(image=rgb)["image"]
+            tx = tfm(image=rgb)["image"].to(device)
             frames_rgb.append(rgb)
             frames_tx.append(tx)
             frame_idx += 1
 
             if len(frames_tx) >= batch_size:
-                self._process_and_write(model, frames_tx, frames_rgb, writer, score_thr, draw_labels, thickness)
+                self._process_and_write(
+                    model, frames_tx, frames_rgb, writer, score_thr, draw_labels, thickness, amp_ctx
+                )
                 frames_tx.clear()
                 frames_rgb.clear()
 
         if frames_tx:
-            self._process_and_write(model, frames_tx, frames_rgb, writer, score_thr, draw_labels, thickness)
+            self._process_and_write(model, frames_tx, frames_rgb, writer, score_thr, draw_labels, thickness, amp_ctx)
 
         writer.release()
         cap.release()
@@ -137,10 +148,12 @@ class InferRunner:
         score_thr: float,
         draw_labels: bool,
         thickness: int,
+        amp_ctx,
     ) -> None:
         import torchvision
 
-        outputs = model(frames_tx)  # type: ignore
+        with amp_ctx:
+            outputs = model(frames_tx)  # type: ignore
         for tx, rgb, pred in zip(frames_tx, frames_rgb, outputs):
             boxes = pred.get("boxes")
             scores = pred.get("scores")
@@ -151,7 +164,7 @@ class InferRunner:
                 scores = scores[mask]
                 labels = labels[mask]
 
-            img_uint8 = (tx.clamp(0, 1) * 255).to(torch.uint8)
+            img_uint8 = (tx.detach().cpu().clamp(0, 1) * 255).to(torch.uint8)
             label_strs = None
             if draw_labels and labels is not None and scores is not None:
                 label_strs = [f"{int(l.item())}:{float(s):.2f}" for l, s in zip(labels, scores)]
@@ -160,3 +173,19 @@ class InferRunner:
             )
             drawn_hwc = drawn.permute(1, 2, 0).cpu().numpy()[:, :, ::-1]  # RGB->BGR
             writer.write(drawn_hwc)
+
+    # --- device/precision helpers ---
+    def _get_device(self):
+        prefer = getattr(self.cfg, "infer", {}).get("device", "auto")
+        if prefer == "auto":
+            return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        try:
+            return torch.device(prefer)
+        except Exception:
+            return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    def _get_amp_context(self, device):
+        prec = str(getattr(self.cfg, "infer", {}).get("precision", "fp32")).lower()
+        if prec in ("fp16", "half", "float16") and device.type == "cuda":
+            return torch.autocast(device_type="cuda", dtype=torch.float16)
+        return nullcontext()

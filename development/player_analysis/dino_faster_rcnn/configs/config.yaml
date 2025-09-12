@@ -28,3 +28,6 @@ hydra:
 logger:
   save_dir: "tb_logs"
   name: "${experiment_name}"
+
+# Optional: path to a trained checkpoint to initialize weights for train/infer
+ckpt_path: null
