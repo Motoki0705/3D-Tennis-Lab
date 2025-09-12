@@ -1,0 +1,2 @@
+mid_channels: 256
+upsample_factor: 4
