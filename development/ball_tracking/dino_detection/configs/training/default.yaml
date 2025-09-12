@@ -1,0 +1,14 @@
+# Trainer settings
+max_epochs: 30
+accelerator: auto
+devices: 1
+precision: 32
+gradient_clip_val: 0.0
+
+# Optimizer
+lr: 3e-4
+weight_decay: 1e-2
+warmup_epochs: 1
+
+# Loss
+loss: bce

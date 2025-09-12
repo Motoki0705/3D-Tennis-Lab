@@ -1,0 +1,6 @@
+repo_dir: third_party/dinov3
+entry: dinov3_vits16
+weights: third_party/dinov3/weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth
+out_channels: 256
+fpn_levels: 3
+freeze: true
