@@ -6,3 +6,8 @@ checkpoint:
 
 lr_monitor:
   logging_interval: "epoch"
+
+visualization:
+  enabled: false
+  max_images: 4
+  log_every_n_epochs: 1
