@@ -1,0 +1,16 @@
+trainer:
+  max_epochs: 30
+  accelerator: auto
+  devices: 1
+  precision: 32
+  gradient_clip_val: 0.0
+  log_every_n_steps: 10
+
+lit_module:
+  loss:
+    name: bce
+  optimizer:
+    lr: 3e-4
+    weight_decay: 1e-2
+  scheduler:
+    warmup_epochs: 1

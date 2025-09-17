@@ -1,0 +1,13 @@
+# @package _global_
+
+task: train # 'train' or 'infer'
+
+experiment_name: "dino_heatmap"
+
+defaults:
+  - data: default
+  - model/backbone: dinov3_vits16
+  - model/head: default
+  - training: default
+  - callbacks: default
+  - inference: default
