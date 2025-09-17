@@ -15,24 +15,41 @@ from torchvision import transforms as T
 def _load_annotations(path: Path) -> List[dict]:
     if not path.exists():
         raise FileNotFoundError(f"Annotation file not found: {path}")
-    txt = path.read_text(encoding="utf-8")
-    txt = txt.strip()
-    if not txt:
-        return []
-    # Try JSON list first
-    try:
-        data = json.loads(txt)
-        if isinstance(data, list):
-            return data
-    except json.JSONDecodeError:
-        pass
-    # Fallback: JSON Lines
-    items: List[dict] = []
-    for line in txt.splitlines():
-        line = line.strip()
-        if not line:
+
+    print(f"--- Loading COCO annotations from: {path} ---")
+
+    with open(path, "r", encoding="utf-8") as f:
+        coco_data = json.load(f)
+
+    # Create a mapping from image_id to image file_name
+    image_id_to_filename = {image["id"]: image["original_path"] for image in coco_data.get("images", [])}
+
+    items = []
+    annotations = coco_data.get("annotations", [])
+    print(f"--- Found {len(image_id_to_filename)} images and {len(annotations)} annotations. ---")
+
+    for ann in annotations:
+        image_id = ann.get("image_id")
+        keypoints = ann.get("keypoints")
+
+        if image_id is None or keypoints is None:
             continue
-        items.append(json.loads(line))
+
+        image_filename = image_id_to_filename.get(image_id)
+        if image_filename is None:
+            continue
+
+        # Assuming keypoints are [x, y, v, ...] and we only care about the first one for the ball center
+        if len(keypoints) >= 3:
+            x, y, v = keypoints[0], keypoints[1], keypoints[2]
+
+            # v=0: not labeled, v=1: labeled but occluded, v=2: labeled and visible
+            # We use any labeled keypoint.
+            if v > 0:
+                item = {"image": image_filename, "center": [x, y]}
+                items.append(item)
+
+    print(f"--- Created {len(items)} dataset items from {len(annotations)} annotations. ---")
     return items
 
 

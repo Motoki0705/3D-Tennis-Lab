@@ -77,7 +77,7 @@ class HeatmapLitModule(pl.LightningModule):
         if logits.shape[-2:] != y.shape[-2:]:
             y = nn.functional.interpolate(y, size=logits.shape[-2:], mode="bilinear", align_corners=False)
         loss = self.criterion(logits, y)
-        self.log("train/loss", loss, prog_bar=True, on_step=True, on_epoch=True)
+        self.log("train_loss", loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss
 
     def validation_step(self, batch: Any, batch_idx: int):
@@ -86,7 +86,7 @@ class HeatmapLitModule(pl.LightningModule):
         if logits.shape[-2:] != y.shape[-2:]:
             y = nn.functional.interpolate(y, size=logits.shape[-2:], mode="bilinear", align_corners=False)
         loss = self.criterion(logits, y)
-        self.log("val/loss", loss, prog_bar=True, on_step=False, on_epoch=True)
+        self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
         return loss
 
     def configure_optimizers(self):
