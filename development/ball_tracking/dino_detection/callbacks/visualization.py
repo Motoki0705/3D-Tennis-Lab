@@ -4,7 +4,6 @@ from typing import Any, Optional, Tuple
 
 import torch
 from pytorch_lightning.callbacks import Callback
-from pytorch_lightning.loggers.logger import LoggerCollection
 from torchvision.utils import make_grid
 
 _IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
@@ -24,8 +23,7 @@ class HeatmapVisualizationCallback(Callback):
             return
         if (trainer.current_epoch + 1) % self.log_every_n_epochs != 0:
             return
-        logger = trainer.logger
-        if logger is None:
+        if not trainer.loggers:
             return
         datamodule = trainer.datamodule
         if datamodule is None or not hasattr(datamodule, "val_dataloader"):
@@ -55,9 +53,10 @@ class HeatmapVisualizationCallback(Callback):
         nrow = min(self.max_images, 4)
         step = trainer.global_step
 
-        _log_image(logger, "val/input", make_grid(inputs_vis, nrow=nrow), step)
-        _log_image(logger, "val/pred_heatmap", make_grid(preds_vis, nrow=nrow, normalize=True), step)
-        _log_image(logger, "val/target_heatmap", make_grid(targets_vis, nrow=nrow, normalize=True), step)
+        for logger in trainer.loggers:
+            _log_image(logger, "val/input", make_grid(inputs_vis, nrow=nrow), step)
+            _log_image(logger, "val/pred_heatmap", make_grid(preds_vis, nrow=nrow, normalize=True), step)
+            _log_image(logger, "val/target_heatmap", make_grid(targets_vis, nrow=nrow, normalize=True), step)
 
 
 def _denormalize(tensor: torch.Tensor) -> torch.Tensor:
@@ -84,10 +83,6 @@ def _first_batch(val_loader: Any) -> Optional[Tuple[torch.Tensor, torch.Tensor]]
 
 
 def _log_image(logger: Any, tag: str, image: torch.Tensor, step: int) -> None:
-    if isinstance(logger, LoggerCollection):
-        for child in logger:
-            _log_image(child, tag, image, step)
-        return
     experiment = getattr(logger, "experiment", None)
     if experiment is None or not hasattr(experiment, "add_image"):
         return
