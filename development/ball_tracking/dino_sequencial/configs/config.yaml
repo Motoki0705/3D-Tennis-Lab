@@ -1,0 +1,13 @@
+# @package _global_
+
+task: train # 'train' or 'infer'
+
+experiment_name: "dino_sequencial_heatmap"
+
+defaults:
+  - data: default
+  - model: default
+  - training: default
+  - callbacks: default
+  - inference: default
+  - lit_module: default
