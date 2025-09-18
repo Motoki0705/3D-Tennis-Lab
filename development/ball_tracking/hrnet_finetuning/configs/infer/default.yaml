@@ -1,7 +1,7 @@
 video_path: "data/samples/test.mp4"
 output_video: "outputs/hrnet_infer/output_track.mp4"
 save_heatmaps_dir: null # e.g., "outputs/hrnet_infer/heatmaps"
-checkpoint: "tb_logs/hrnet_finetune/version_13/loss=0.0000.ckpt" # supports .pth/.pth.tar/.ckpt
+checkpoint: "development/ball_tracking/hrnet_finetuning/weight/wasb_tennis_best.pth.tar" # supports .pth/.pth.tar/.ckpt
 input_size: [288, 512] # H, W for resizing frames
 batch_size: 8
 stride: 1 # window stride over frames
@@ -20,7 +20,7 @@ draw_radius: 2
 draw_thickness: 2
 
 tracker:
-  enable: true # toggle tracker on/off
+  enable: false # toggle tracker on/off
   tail: 30
   hm_threshold: 0.25
   max_missed: 30
