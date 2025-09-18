@@ -82,7 +82,7 @@ Hydraの`_target_`機能を使えば、YAML上でインスタンス化する�
 model_checkpoint:
   _target_: pytorch_lightning.callbacks.ModelCheckpoint
   dirpath: "checkpoints/"
-  filename: "epoch{epoch:03d}-val_loss{val_loss:.3f}"
+  filename: "epoch{epoch:03d}-val_loss{val_loss:.3f}" # val/lossをmonitorするとファイルが正しく保存できない
   monitor: "val_loss"
   mode: "min"
   save_top_k: 1
