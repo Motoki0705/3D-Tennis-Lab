@@ -42,9 +42,9 @@ class InferRunner(BaseRunner):
         self.hm_blend_alpha: float = float(getattr(r_cfg, "blend_alpha", 0.4)) if r_cfg else 0.4
 
         # Build model
-        from ..model.base_hrnet_3dstem import HRNet3DStem
+        from ..model.base_hrnet import HRNet
 
-        self.model = HRNet3DStem(cfg.model).to(self.device).eval()
+        self.model = HRNet(cfg.model).to(self.device).eval()
 
         # Load checkpoint
         from ..utils import load_model_weights
