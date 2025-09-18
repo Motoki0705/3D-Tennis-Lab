@@ -1,0 +1,7 @@
+# @package lit_module
+
+optimizer:
+  learning_rate: 1e-4
+
+scheduler:
+  warmup_epochs: 5
