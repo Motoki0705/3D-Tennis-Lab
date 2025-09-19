@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from development.utils.lightning.base_datamodule import BaseDataModule
+from development.core.lightning.base_datamodule import BaseDataModule
 from .dataset import CourtKeypointDataset
 
 

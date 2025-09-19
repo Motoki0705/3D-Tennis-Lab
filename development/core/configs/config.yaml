@@ -1,0 +1,28 @@
+# Base Hydra experiment configuration shared across 3D Tennis Lab projects.
+defaults:
+  - training: lightning_default
+  - callbacks: lightning_default
+  - _self_
+
+# Override these three fields at the experiment level.
+project: "core_project"
+experiment: "base_experiment"
+task: "train"
+
+seed: 42
+
+# A canonical experiment name (<project>_<experiment>). Override if needed.
+experiment_name: "${project}_${experiment}"
+
+hydra:
+  run:
+    dir: outputs/${experiment_name}/${now:%Y-%m-%d_%H-%M-%S}
+
+logger:
+  save_dir: "tb_logs"
+  name: "${experiment_name}"
+  version: null
+  log_model: False
+
+# Optional path to resume/finetune from a checkpoint.
+ckpt_path: null

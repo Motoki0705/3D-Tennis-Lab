@@ -1,0 +1,25 @@
+# Lightning callback bundle commonly reused across experiments.
+model_checkpoint:
+  _target_: pytorch_lightning.callbacks.ModelCheckpoint
+  dirpath: "${hydra:runtime.output_dir}/checkpoints"
+  filename: "epoch={epoch}-val_loss={val_loss:.3f}"
+  monitor: "val_loss"
+  mode: "min"
+  save_top_k: 3
+  save_last: true
+
+lr_monitor:
+  _target_: pytorch_lightning.callbacks.LearningRateMonitor
+  logging_interval: "step"
+
+early_stopping:
+  _target_: pytorch_lightning.callbacks.EarlyStopping
+  monitor: "val_loss"
+  patience: 5
+  mode: "min"
+
+rich_progress_bar:
+  _target_: pytorch_lightning.callbacks.RichProgressBar
+
+# Toggleable placeholder for custom experiment callbacks. Override from task configs.
+custom: null

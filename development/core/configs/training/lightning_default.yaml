@@ -1,0 +1,30 @@
+# Default training hyperparameters for Lightning-based experiments.
+accelerator: auto
+devices: 1
+precision: 16-mixed
+strategy: null
+max_epochs: 20
+max_steps: null
+log_every_n_steps: 50
+val_check_interval: 1.0
+check_val_every_n_epoch: 1
+num_sanity_val_steps: 0
+gradient_clip_val: 0.0
+detect_anomaly: false
+reload_dataloaders_every_n_epochs: 1
+accumulate_grad_batches: 1
+
+optimizer:
+  name: adamw
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
+  betas: [0.9, 0.999]
+  eps: 1.0e-08
+
+lr_scheduler:
+  name: cosine_warmup
+  interval: epoch
+  warmup_epochs: 1
+  warmup_start_lr: 1.0e-6
+  min_lr: 0.0
+  max_epochs: ${training.max_epochs}

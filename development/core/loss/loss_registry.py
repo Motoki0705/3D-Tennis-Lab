@@ -1,4 +1,4 @@
-# filename: development/utils/loss/loss_registry.py
+# filename: development/core/loss/loss_registry.py
 
 
 class LossRegistry:
