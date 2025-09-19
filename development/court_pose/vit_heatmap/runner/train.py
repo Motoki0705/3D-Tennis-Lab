@@ -20,7 +20,7 @@ class TrainRunner(BaseRunner):
     def run(self):
         from ..training.lit_module import CourtLitModule
         from ..training.datamodule import CourtDataModule
-        from development.utils.transformers.keypoint_transformer import prepare_transforms
+        from development.core.transformers.keypoint_transformer import prepare_transforms
 
         # LightningModule
         lit_module = CourtLitModule(self.cfg)
@@ -57,7 +57,7 @@ class TrainRunner(BaseRunner):
 
         # Heatmap visualizer
         try:
-            from development.utils.callbacks.heatmap_logger import HeatmapImageLogger
+            from development.core.callbacks.heatmap_logger import HeatmapImageLogger
 
             num_samples = int(getattr(self.cfg.callbacks.heatmap_logger, "num_samples", 3))
             heatmap_cb = HeatmapImageLogger(num_samples=num_samples)

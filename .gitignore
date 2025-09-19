@@ -192,3 +192,6 @@ node_modules/
 *.pth
 *.ckpt
 *.pth.tar
+
+# test artifacts
+development/core/tests/end2end/artifacts

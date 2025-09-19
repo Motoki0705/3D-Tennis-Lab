@@ -1,4 +1,4 @@
-# filename: development/utils/loss/__init__.py
+# filename: development/core/loss/__init__.py
 import torch.nn as nn
 
 # カスタム損失関数をインポートして登録

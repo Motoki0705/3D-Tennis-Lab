@@ -1,7 +1,7 @@
 import torch
 
-from development.utils.lightning.base_lit_module import BaseLitModule
-from development.utils.loss import loss_registry
+from development.core.lightning.base_lit_module import BaseLitModule
+from development.core.loss import loss_registry
 from ..model.vit_heatmap import VitHeatmapModel
 
 
