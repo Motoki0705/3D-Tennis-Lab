@@ -1,0 +1,17 @@
+reference_frame:
+  origin: center
+  axes: [x_baseline, y_net, z_up]
+method: pnp
+use_court_constraints: true
+initial_guesses:
+  cam_01:
+    rotation: [0.0, 0.0, 0.0]
+    translation: [0.0, 0.0, 0.0]
+  cam_02:
+    rotation: [0.0, 0.0, 0.0]
+    translation: [0.0, 0.0, 0.0]
+constraints:
+  landmarks:
+    - baseline_left
+    - baseline_right
+    - net_center

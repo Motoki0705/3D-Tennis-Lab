@@ -1,0 +1,12 @@
+optimizer:
+  type: levenberg_marquardt
+  max_iterations: 50
+  tolerance: 1e-6
+weights:
+  reprojection_error: 1.0
+  temporal_smoothness: 0.1
+  prior_rotation: 0.05
+  prior_translation: 0.05
+robust_loss:
+  name: huber
+  delta: 1.0

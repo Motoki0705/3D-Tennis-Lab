@@ -1,0 +1,29 @@
+# Root Hydra configuration for the multicam 2D→3D reconstruction pipeline.
+# Override individual components via CLI, e.g. `pipeline=detect2d detection.player=vitpose`.
+
+defaults:
+  - workspace: default
+  - data: dataset
+  - sync: default
+  - calibration/intrinsics: pinhole
+  - calibration/extrinsics: pnp
+  - calibration/bundle: levenberg_marquardt
+  - detection/player: hrnet
+  - detection/ball: yolox
+  - detection/tracker: bytetrack
+  - triangulation/method: robust
+  - triangulation/smoothing: kalman
+  - export: formats
+  - _self_
+
+pipeline: full
+
+hydra:
+  run:
+    dir: ${workspace.outputs}/hydra/${now:%Y%m%d_%H%M%S}
+  sweep:
+    dir: ${workspace.outputs}/hydra/multirun
+    subdir: ${now:%Y%m%d_%H%M%S}
+  output_subdir: null
+  job:
+    chdir: false
