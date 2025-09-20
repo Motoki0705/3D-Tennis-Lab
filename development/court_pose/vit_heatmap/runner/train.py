@@ -57,7 +57,7 @@ class TrainRunner(BaseRunner):
 
         # Heatmap visualizer
         try:
-            from development.core.callbacks.heatmap_logger import HeatmapImageLogger
+            from development.core.callbacks.plaggable_logger import HeatmapImageLogger
 
             num_samples = int(getattr(self.cfg.callbacks.heatmap_logger, "num_samples", 3))
             heatmap_cb = HeatmapImageLogger(num_samples=num_samples)

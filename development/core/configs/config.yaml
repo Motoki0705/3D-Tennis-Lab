@@ -1,5 +1,6 @@
 # Base Hydra experiment configuration shared across 3D Tennis Lab projects.
 defaults:
+  - data: ball
   - training: lightning_default
   - callbacks: lightning_default
   - _self_
@@ -26,3 +27,11 @@ logger:
 
 # Optional path to resume/finetune from a checkpoint.
 ckpt_path: null
+
+# Component placeholders (override in experiment configs).
+datamodule: null
+model: null
+loss: null
+metrics: {}
+lit_module:
+  _target_: development.core.lightning.base_lit_module.BaseLitModule
