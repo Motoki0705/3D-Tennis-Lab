@@ -1,13 +1,36 @@
 # @package _global_
 
-task: train # 'train' or 'infer'
-
-experiment_name: "dino_sequencial_heatmap"
-
 defaults:
-  - data: default
-  - model: default
-  - training: default
-  - callbacks: default
-  - inference: default
-  - lit_module: default
+  - override /data: dino_sequencial
+  - override /training: dino_sequencial
+  - override /callbacks: dino_sequencial
+  - _self_
+
+project: "ball_tracking"
+experiment: "dino_sequencial"
+
+datamodule:
+  _target_: development.dino_sequencial.dataset.datamodule.build_datamodule
+  cfg: ${data}
+
+model:
+  _target_: development.dino_sequencial.model.factory.create_model
+  repo_dir: "third_party/dinov3"
+  entry: "dinov3_vits16"
+  weights: "third_party/dinov3/weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
+  out_channels: 256
+  fpn_levels: 3
+  freeze_backbone: True
+  output_stride: 4 # heatmap stride w.r.t. input
+
+loss:
+  _target_: development.dino_sequencial.loss.strategy.build_loss
+  reduction: "mean"
+  target_key: "heatmaps"
+
+metrics: {}
+
+lit_module:
+  _target_: development.dino_sequencial.model.factory.create_lit_module
+  target_key: "heatmaps"
+  include_inputs: true

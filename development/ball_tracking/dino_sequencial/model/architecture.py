@@ -88,13 +88,14 @@ class NetConfig:
     encoder_out_dim: int = 384
     rnn_hidden_dim: int = 128
     output_stride: int = 4
+    freeze_encoder: bool = True
 
 
 class SequenceHeatmapNet(nn.Module):
     def __init__(self, cfg: NetConfig):
         super().__init__()
         self.cfg = cfg
-        self.encoder = DinoV3Encoder(cfg.repo_dir, cfg.entry, cfg.weights)
+        self.encoder = DinoV3Encoder(cfg.repo_dir, cfg.entry, cfg.weights, freeze=cfg.freeze_encoder)
         self.conv_gru = ConvGRUCell(cfg.encoder_out_dim, cfg.rnn_hidden_dim, kernel_size=3)
         self.decoder = HeatmapDecoder(cfg.rnn_hidden_dim, cfg.output_stride)
 
