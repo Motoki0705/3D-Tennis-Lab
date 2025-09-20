@@ -1,0 +1,6 @@
+method: robust
+ransac:
+  iterations: 1000
+  threshold: 2.0
+min_cameras: 2
+bundle_refine: true

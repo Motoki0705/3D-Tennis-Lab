@@ -1,0 +1,7 @@
+method: bytetrack
+association:
+  max_distance: 0.2
+  min_iou: 0.1
+  motion_model: kalman
+output:
+  store_intermediate: true

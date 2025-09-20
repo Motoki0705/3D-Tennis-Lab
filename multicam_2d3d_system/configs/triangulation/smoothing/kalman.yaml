@@ -1,0 +1,8 @@
+filter: kalman
+kalman:
+  process_noise: 1e-2
+  measurement_noise: 1e-1
+  smoothing_window: 5
+fallback:
+  interpolate_gaps: true
+  max_gap_frames: 6
