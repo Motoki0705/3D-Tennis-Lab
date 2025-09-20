@@ -1,0 +1,40 @@
+# Core defaults for player detection datasets.
+paths:
+  train:
+    images: "data/processed/ball/images"
+    annotation: "data/processed/ball/annotation.json"
+  val:
+    images: null
+    annotation: null
+  test:
+    images: null
+    annotation: null
+  unlabeled:
+    annotation: null
+
+dataset:
+  image_size:
+    default: 1024
+    low: 640
+    high: 1024
+  aspect_ratio: "2:1"
+  categories:
+    names: ["player"]
+    target: "player"
+    required_instances_per_image: 2
+
+# DataLoader defaults (torchvision-style detection loaders may use custom collate functions).
+dataloader:
+  batch_size: 8
+  num_workers: 4
+  pin_memory: true
+  persistent_workers: false
+
+splits:
+  train_ratio: 0.8
+  val_ratio: 0.15
+  test_ratio: 0.05
+  seed: 42
+
+augmentations:
+  pipeline: null

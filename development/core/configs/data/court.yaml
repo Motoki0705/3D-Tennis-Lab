@@ -1,0 +1,41 @@
+# Core defaults for court keypoint datasets.
+paths:
+  train:
+    images: "data/processed/court/images"
+    annotation: "data/processed/court/annotation.json"
+  val:
+    images: null
+    annotation: null
+  test:
+    images: null
+    annotation: null
+  unlabeled:
+    annotation: null
+
+dataset:
+  image_size: [224, 224]
+  heatmap_size: [224, 224]
+  output_stride: 4
+  heatmap_sigma: 3.0
+  keypoints:
+    count: null
+    use_offset: false
+  normalization:
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+
+# DataLoader defaults.
+dataloader:
+  batch_size: 32
+  num_workers: 4
+  pin_memory: true
+  persistent_workers: false
+
+splits:
+  train_ratio: 0.8
+  val_ratio: 0.1
+  test_ratio: 0.1
+  seed: 42
+
+augmentations:
+  pipeline: null  # Override with Albumentations Compose when needed.
