@@ -49,17 +49,15 @@ class ConvGRUCell(nn.Module):
         pad = kernel_size // 2
         self.conv_gates = nn.Conv2d(input_dim + hidden_dim, hidden_dim * 2, kernel_size, padding=pad)
         self.conv_can = nn.Conv2d(input_dim + hidden_dim, hidden_dim, kernel_size, padding=pad)
-        self._init_identity()
+        self._init_weights()
 
     @torch.no_grad()
-    def _init_identity(self) -> None:
-        # gates: [reset, update]
-        nn.init.zeros_(self.conv_gates.weight)
+    def _init_weights(self) -> None:
+        # Xavier init for conv weights
+        nn.init.xavier_uniform_(self.conv_gates.weight)
+        nn.init.xavier_uniform_(self.conv_can.weight)
+        # Biases set to zero (standard choice)
         nn.init.zeros_(self.conv_gates.bias)
-        # make update gate ~0 via strong negative bias
-        self.conv_gates.bias[self.hidden_dim :] = -5.0  # sigmoid(-5) ~= 0.0067
-        # candidate state has no effect initially
-        nn.init.zeros_(self.conv_can.weight)
         nn.init.zeros_(self.conv_can.bias)
 
     def forward(self, x: torch.Tensor, h_cur: torch.Tensor) -> torch.Tensor:

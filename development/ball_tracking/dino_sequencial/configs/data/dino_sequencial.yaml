@@ -27,8 +27,8 @@ dataset:
     names: ["ball"]
 
 dataloader:
-  batch_size: 4
-  num_workers: 0
+  batch_size: 16
+  num_workers: 2
   pin_memory: true
   persistent_workers: false
 
