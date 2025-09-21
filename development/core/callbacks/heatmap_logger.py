@@ -64,7 +64,8 @@ class HeatmapLogger(pl.callbacks.Callback if pl else object):
     _buffer: Dict[str, torch.Tensor] | None = None
 
     def on_validation_epoch_start(self, trainer, pl_module):
-        if (pl_module.current_epoch % self.every_n_epochs) != 0:
+        epoch = int(getattr(pl_module, "current_epoch", 0))
+        if epoch >= 0 and (epoch % self.every_n_epochs) != 0:
             self._ready = False
             return
         self._ready = True
@@ -150,15 +151,28 @@ class HeatmapLogger(pl.callbacks.Callback if pl else object):
 
     def _log_chunked_grid(self, writer, step: int):
         assert self._buffer is not None
-        pred = self._buffer["pred"]  # [N,K,H,W]
-        targ = self._buffer["targ"]
-        images = self._buffer.get("images")
+        pred = self._buffer["pred"]  # [N,K,H,W] or [B,T,C,H,W]
+        targ = self._buffer["targ"]  # [N,K,H,W] or [B,T,C,H,W]
+        images = self._buffer.get("images")  # [N,C,H,W] or [B,T,C,H,W]
+        if pred is not None and pred.ndim == 5:
+            b, t, c, h, w = pred.shape
+            pred = pred.reshape(b * t, c, h, w)
+        if targ is not None and targ.ndim == 5:
+            b, t, c, h, w = targ.shape
+            targ = targ.reshape(b * t, c, h, w)
+        # ★ images も 5D→4D に正規化（最後のフレームで良ければ images = images[:, -1] でもOK）
+        if images is not None and images.ndim == 5:
+            b, t, c, h, w = images.shape
+            images = images.reshape(b * t, c, h, w)
         N, K, H, W = pred.shape
 
         # Optionally log inputs (once)
         if self.log_input and images is not None:
-            vis = images[: self.max_samples]
-            writer.add_images(f"{self.stage_prefix}/{self.image_tag}", vis, step)
+            vis = images[: self.max_samples]  # -> [N,C,H,W]
+            # 1chなら3chへ
+            if vis.size(1) == 1:
+                vis = vis.repeat(1, 3, 1, 1)
+            writer.add_images(f"{self.stage_prefix}/{self.image_tag}", vis, step, dataformats="NCHW")
 
         # chunk K into groups and log big grids
         for i in range(N):
@@ -178,12 +192,10 @@ class HeatmapLogger(pl.callbacks.Callback if pl else object):
                 pred_stack = torch.stack(pred_chunk, dim=0)  # [M,1,H',W']
                 targ_stack = torch.stack(targ_chunk, dim=0)
 
-                pred_grid = make_grid(
-                    pred_stack, nrow=self.grid_nrow, normalize=False
-                )  # [3,Hg,Wg] after 1->3 by make_grid
+                pred_grid = make_grid(pred_stack, nrow=self.grid_nrow, normalize=False)  # [?,Hg,Wg]（1chのことがある）
                 targ_grid = make_grid(targ_stack, nrow=self.grid_nrow, normalize=False)
 
-                # make_grid returns [3,H,W] with grayscale mapped to 3ch
+                # 安全に3chへ（_log_imageはCHW想定）
                 self._log_image(
                     writer, f"{self.stage_prefix}/{self.pred_tag}/sample_{i:02d}/chunk_{chunk_idx:02d}", pred_grid, step
                 )

@@ -1,5 +1,3 @@
-# @package callbacks
-
 model_checkpoint:
   _target_: pytorch_lightning.callbacks.ModelCheckpoint
   dirpath: "${hydra:runtime.output_dir}/checkpoints"
