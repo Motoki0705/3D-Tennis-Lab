@@ -141,7 +141,6 @@ def _run(cfg: DictConfig) -> None:
     lit_module_cfg = full_cfg.get("lit_module")
     if lit_module_cfg is None:
         raise ValueError("lit_module configuration must be provided by the experiment.")
-    print(OmegaConf.to_yaml(lit_module_cfg))
     lit_module = instantiate(
         lit_module_cfg,
         cfg=full_cfg,

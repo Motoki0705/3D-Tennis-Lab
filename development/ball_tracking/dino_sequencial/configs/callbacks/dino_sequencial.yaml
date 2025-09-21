@@ -23,12 +23,14 @@ rich_progress_bar:
 custom:
   heatmap_logger:
     _target_: development.core.callbacks.heatmap_logger.HeatmapLogger
-    mode: "chunked_grid"
-    max_samples: 1
+    mode: "per_channel" # kept for compatibility, currently logs per-frame images
+    num_samples: 2 # number of sequences sampled per epoch
     upsample_to: 512
-    grid_nrow: 4
-    chunk_size: 16
-    normalize_each: true
+    normalize_each: True
     stage_prefix: "Val"
-    log_input: true
+    log_input: True
+    image_tag: "Input"
+    pred_tag: "Pred"
+    target_tag: "GT"
     every_n_epochs: 1
+    rng_seed: 1234

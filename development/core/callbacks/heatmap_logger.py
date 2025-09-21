@@ -1,30 +1,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 
 import torch
 import torch.nn.functional as F
-from torchvision.utils import make_grid
 
 try:
     import pytorch_lightning as pl
-except Exception:  # pragma: no cover - Lightning not installed in env
+except Exception:
     pl = None  # type: ignore
 
 
 def _to_3ch(x: torch.Tensor) -> torch.Tensor:
-    """Convert [H,W] or [1,H,W] to [3,H,W] grayscale (0..1)."""
     if x.dim() == 2:
-        x = x.unsqueeze(0)  # [1,H,W]
+        x = x.unsqueeze(0)
     if x.size(0) == 1:
         x = x.repeat(3, 1, 1)
     return x.clamp(0, 1)
 
 
 def _upsample_2d(x: torch.Tensor, size: Tuple[int, int]) -> torch.Tensor:
-    """Upsample a 2D map [H,W] to size using bilinear (returns [H',W'])."""
-    x = x.unsqueeze(0).unsqueeze(0)  # [1,1,H,W]
+    x = x.unsqueeze(0).unsqueeze(0)
     x = F.interpolate(x, size=size, mode="bilinear", align_corners=False)
     return x.squeeze(0).squeeze(0)
 
@@ -32,77 +29,80 @@ def _upsample_2d(x: torch.Tensor, size: Tuple[int, int]) -> torch.Tensor:
 @dataclass
 class HeatmapLogger(pl.callbacks.Callback if pl else object):
     """
-    Log ALL heatmaps (K) for both GT and Pred at a large size to TensorBoard.
-
-    Modes:
-      - per_channel  : each heatmap is logged as a separate large image
-      - chunked_grid : heatmaps are grouped into chunks and logged as large grids
-
-    Expected outputs in validation/test steps:
-      outputs = {
-        "images":          [N, C, H, W] (optional; required if log_input=True),
-        "pred_heatmaps":   [N, K, H, W],
-        "target_heatmaps": [N, K, H, W],
-      }
+    Logs Input / Pred / GT in **temporal order**.
+    Expects 5D tensors from the LightningModule outputs:
+      images: [B, T, C, H, W] (optional; required if log_input=True)
+      pred_heatmaps:   [B, T, 1, H, W] or [B, T, K, H, W]
+      target_heatmaps: [B, T, 1, H, W] or [B, T, K, H, W]
     """
 
-    mode: str = "per_channel"  # "per_channel" | "chunked_grid"
-    max_samples: int = 2  # how many samples from the first batch to log
-    upsample_to: int = 512  # final H=W size for single heatmap images
-    grid_nrow: int = 4  # for chunked_grid mode
-    chunk_size: int = 16  # number of K per grid in chunked_grid mode
-    normalize_each: bool = True  # normalize each heatmap independently
-    stage_prefix: str = "Val"  # "Val" / "Test"
-    log_input: bool = True  # also log the input image
+    mode: str = "per_channel"  # kept for compatibility, currently logs per-frame images
+    num_samples: int = 2  # number of sequences sampled per epoch
+    upsample_to: int = 512
+    normalize_each: bool = True
+    stage_prefix: str = "Val"
+    log_input: bool = True
     image_tag: str = "Input"
     pred_tag: str = "Pred"
     target_tag: str = "GT"
-    every_n_epochs: int = 1  # log every n epochs
+    every_n_epochs: int = 1
+    rng_seed: int = 1234  # base seed; epochでオフセット
 
-    # internal buffers
+    # internal
     _ready: bool = True
-    _buffer: Dict[str, torch.Tensor] | None = None
+    _buffer: Optional[Dict[str, torch.Tensor]] = None
+    _epoch: int = 0
 
+    # ---------------- Hooks ----------------
     def on_validation_epoch_start(self, trainer, pl_module):
-        epoch = int(getattr(pl_module, "current_epoch", 0))
-        if epoch >= 0 and (epoch % self.every_n_epochs) != 0:
+        self._epoch = int(getattr(pl_module, "current_epoch", 0))
+        # allow sanity check (epoch=-1); otherwise honor every_n_epochs
+        if self._epoch >= 0 and (self._epoch % self.every_n_epochs) != 0:
             self._ready = False
             return
         self._ready = True
         self._buffer = None
 
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
+        # 1バッチ目だけ拾う（コスト・重複回避）
         if not self._ready or batch_idx != 0:
             return
         if not isinstance(outputs, dict):
             return
-        keys = ["pred_heatmaps", "target_heatmaps"]
-        if not all(k in outputs for k in keys):
+        if ("pred_heatmaps" not in outputs) or ("target_heatmaps" not in outputs):
             return
 
-        pred = outputs["pred_heatmaps"].detach()
-        targ = outputs["target_heatmaps"].detach()
-        images = outputs.get("images", None)
-        if images is not None:
-            images = images.detach()
+        pred5 = outputs["pred_heatmaps"].detach()  # [B,T,K,H,W] or [B,T,1,H,W]
+        targ5 = outputs["target_heatmaps"].detach()
+        imgs5 = outputs.get("images", None)
+        if imgs5 is not None:
+            imgs5 = imgs5.detach()  # [B,T,C,H,W]
 
-        # Slice to max_samples
-        n = min(pred.size(0), self.max_samples)
-        pred = pred[:n]
-        targ = targ[:n]
-        if images is not None:
-            images = images[:n]
+        # 形状チェック（Tは同じ想定）
+        B = int(pred5.shape[0])
+        # torch.randperm は CPU Generator しか受け付けない
+        g = torch.Generator(device="cpu")
+        g.manual_seed(self.rng_seed + max(self._epoch, 0))
+        if self.num_samples >= B:
+            sel = torch.arange(B)
+        else:
+            sel = torch.randperm(B, generator=g)[: self.num_samples]
+        sel = sel.tolist()
 
-        self._buffer = {
-            "pred": pred.cpu(),
-            "targ": targ.cpu(),
+        # バッファに 5D のまま保存（後で時間順に1枚ずつ出力）
+        buf = {
+            "pred": pred5[sel].cpu(),  # [S,T,K,H,W]
+            "targ": targ5[sel].cpu(),
         }
-        if images is not None:
-            self._buffer["images"] = images.cpu()
-        self._ready = False  # only first batch
+        if imgs5 is not None:
+            buf["images"] = imgs5[sel].cpu()  # [S,T,C,H,W]
+        self._buffer = buf
+        self._ready = False
 
+    # ---------------- Utils ----------------
     def _log_image(self, writer, tag: str, img: torch.Tensor, step: int):
-        # img: [3,H,W], 0..1
+        # img: [C,H,W] or [H,W] -> 3ch
+        img = _to_3ch(img)
         writer.add_image(tag, img, step, dataformats="CHW")
 
     def _norm(self, x: torch.Tensor) -> torch.Tensor:
@@ -116,98 +116,46 @@ class HeatmapLogger(pl.callbacks.Callback if pl else object):
             x = x.clamp(0, 1)
         return x
 
-    def _log_per_channel(self, writer, step: int):
+    # ---------------- Logging core ----------------
+    def _log_temporal_sequences(self, writer, step: int):
+        """
+        時系列順に、各サンプル S について t=0..T-1 を順番に 1枚ずつ保存する。
+        - Input   (任意)
+        - Pred    （K>1のときは各Kを個別保存）
+        - GT
+        """
         assert self._buffer is not None
-        pred = self._buffer["pred"]  # [N,K,H,W]
-        targ = self._buffer["targ"]  # [N,K,H,W]
-        images = self._buffer.get("images")  # [N,C,H,W] or None
-        N, K, H, W = pred.shape
         size = (self.upsample_to, self.upsample_to)
 
-        # Optional: log input images large
-        if self.log_input and images is not None:
-            for i in range(N):
-                img = images[i]
-                if img.dim() == 3 and img.size(0) == 1:
-                    img = img.repeat(3, 1, 1)
-                # upscale input if needed
-                if img.shape[-2:] != size:
-                    img = F.interpolate(img.unsqueeze(0), size=size, mode="bilinear", align_corners=False).squeeze(0)
-                self._log_image(writer, f"{self.stage_prefix}/{self.image_tag}/sample_{i:02d}", img, step)
+        pred = self._buffer["pred"]  # [S,T,K,H,W]
+        targ = self._buffer["targ"]  # [S,T,K,H,W]
+        imgs = self._buffer.get("images")  # [S,T,C,H,W] or None
 
-        # Log every K as a separate big image
-        for i in range(N):
-            for k in range(K):
-                hp = self._norm(pred[i, k])  # [H,W]
-                ht = self._norm(targ[i, k])
-                hp = _upsample_2d(hp, size)
-                ht = _upsample_2d(ht, size)
-                self._log_image(
-                    writer, f"{self.stage_prefix}/{self.pred_tag}/sample_{i:02d}/kp_{k:03d}", _to_3ch(hp), step
-                )
-                self._log_image(
-                    writer, f"{self.stage_prefix}/{self.target_tag}/sample_{i:02d}/kp_{k:03d}", _to_3ch(ht), step
-                )
+        S, T = int(pred.shape[0]), int(pred.shape[1])
+        K = int(pred.shape[2])
 
-    def _log_chunked_grid(self, writer, step: int):
-        assert self._buffer is not None
-        pred = self._buffer["pred"]  # [N,K,H,W] or [B,T,C,H,W]
-        targ = self._buffer["targ"]  # [N,K,H,W] or [B,T,C,H,W]
-        images = self._buffer.get("images")  # [N,C,H,W] or [B,T,C,H,W]
-        if pred is not None and pred.ndim == 5:
-            b, t, c, h, w = pred.shape
-            pred = pred.reshape(b * t, c, h, w)
-        if targ is not None and targ.ndim == 5:
-            b, t, c, h, w = targ.shape
-            targ = targ.reshape(b * t, c, h, w)
-        # ★ images も 5D→4D に正規化（最後のフレームで良ければ images = images[:, -1] でもOK）
-        if images is not None and images.ndim == 5:
-            b, t, c, h, w = images.shape
-            images = images.reshape(b * t, c, h, w)
-        N, K, H, W = pred.shape
+        for s in range(S):
+            for t in range(T):
+                # --- Input ---
+                if self.log_input and imgs is not None:
+                    img = imgs[s, t]  # [C,H,W]
+                    if img.dim() == 3 and img.shape[-2:] != size:
+                        img = F.interpolate(img.unsqueeze(0), size=size, mode="bilinear", align_corners=False).squeeze(
+                            0
+                        )
+                    self._log_image(writer, f"{self.stage_prefix}/{self.image_tag}/s{s:02d}/t{t:04d}", img, step)
 
-        # Optionally log inputs (once)
-        if self.log_input and images is not None:
-            vis = images[: self.max_samples]  # -> [N,C,H,W]
-            # 1chなら3chへ
-            if vis.size(1) == 1:
-                vis = vis.repeat(1, 3, 1, 1)
-            writer.add_images(f"{self.stage_prefix}/{self.image_tag}", vis, step, dataformats="NCHW")
+                # --- Pred / GT（K枚あれば全部。1枚ならそのまま） ---
+                for k in range(K):
+                    hp = self._norm(pred[s, t, k])  # [H,W]
+                    ht = self._norm(targ[s, t, k])  # [H,W]
+                    hp = _upsample_2d(hp, size)
+                    ht = _upsample_2d(ht, size)
 
-        # chunk K into groups and log big grids
-        for i in range(N):
-            start = 0
-            chunk_idx = 0
-            while start < K:
-                end = min(start + self.chunk_size, K)
-                # prepare tensors [M,1,H,W] -> upsample -> make_grid
-                pred_chunk = []
-                targ_chunk = []
-                for k in range(start, end):
-                    hp = self._norm(pred[i, k])
-                    ht = self._norm(targ[i, k])
-                    pred_chunk.append(_upsample_2d(hp, (self.upsample_to, self.upsample_to)).unsqueeze(0))
-                    targ_chunk.append(_upsample_2d(ht, (self.upsample_to, self.upsample_to)).unsqueeze(0))
-
-                pred_stack = torch.stack(pred_chunk, dim=0)  # [M,1,H',W']
-                targ_stack = torch.stack(targ_chunk, dim=0)
-
-                pred_grid = make_grid(pred_stack, nrow=self.grid_nrow, normalize=False)  # [?,Hg,Wg]（1chのことがある）
-                targ_grid = make_grid(targ_stack, nrow=self.grid_nrow, normalize=False)
-
-                # 安全に3chへ（_log_imageはCHW想定）
-                self._log_image(
-                    writer, f"{self.stage_prefix}/{self.pred_tag}/sample_{i:02d}/chunk_{chunk_idx:02d}", pred_grid, step
-                )
-                self._log_image(
-                    writer,
-                    f"{self.stage_prefix}/{self.target_tag}/sample_{i:02d}/chunk_{chunk_idx:02d}",
-                    targ_grid,
-                    step,
-                )
-
-                start = end
-                chunk_idx += 1
+                    self._log_image(writer, f"{self.stage_prefix}/{self.pred_tag}/s{s:02d}/t{t:04d}/k{k:03d}", hp, step)
+                    self._log_image(
+                        writer, f"{self.stage_prefix}/{self.target_tag}/s{s:02d}/t{t:04d}/k{k:03d}", ht, step
+                    )
 
     def on_validation_epoch_end(self, trainer, pl_module):
         if self._buffer is None:
@@ -215,14 +163,11 @@ class HeatmapLogger(pl.callbacks.Callback if pl else object):
         logger = getattr(trainer, "logger", None)
         if logger is None or not hasattr(logger, "experiment"):
             return
-        writer = logger.experiment  # TensorBoard SummaryWriter
+        writer = logger.experiment
         step = getattr(pl_module, "current_epoch", 0)
 
-        if self.mode == "per_channel":
-            self._log_per_channel(writer, step)
-        elif self.mode == "chunked_grid":
-            self._log_chunked_grid(writer, step)
-        else:
-            raise ValueError(f"Unknown mode: {self.mode}")
+        # 時系列順ログ
+        self._log_temporal_sequences(writer, step)
+
         # clear
         self._buffer = None
