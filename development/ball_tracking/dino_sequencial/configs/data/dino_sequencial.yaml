@@ -1,0 +1,57 @@
+paths:
+  train:
+    images: ${oc.env:BALL_SEQ_IMAGES_ROOT, "data/processed/ball/images"}
+    annotation: ${oc.env:BALL_SEQ_LABELED_JSON, "data/processed/ball/annotation.json"}
+  val:
+    images: null
+    annotation: null
+  test:
+    images: null
+    annotation: null
+  unlabeled:
+    annotation: null
+
+dataset:
+  image_size: [320, 640]
+  output_stride: 4
+  heatmap_sigma: 2.0
+  sequence:
+    length: 8
+    stride: 4
+    allow_partial_last: false
+    drop_short_clips: false
+  normalization:
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+  categories:
+    names: ["ball"]
+
+dataloader:
+  batch_size: 16
+  num_workers: 2
+  pin_memory: true
+  persistent_workers: false
+
+splits:
+  train_ratio: 0.9
+  val_ratio: 0.1
+  test_ratio: 0.0
+  seed: 42
+
+# データ拡張を弱めた例
+augmentations:
+  horizontal_flip:
+    prob: 0.2      # 50% → 20% に減らす
+  affine:
+    prob: 0.1      # 30% → 10%
+    scale_limit: 0.02   # 0.05 → 0.02 に縮小（拡大/縮小の幅を弱く）
+    shift_limit: 0.02   # 0.05 → 0.02 に縮小（平行移動を弱く）
+  gaussian_blur:
+    prob: 0.0      # 無効のまま
+    kernel: 3
+  color_jitter:
+    prob: 0.1      # 30% → 10%
+    brightness: 0.05   # 0.1 → 0.05
+    contrast: 0.05     # 0.1 → 0.05
+    saturation: 0.02   # 0.05 → 0.02
+    hue: 0.01          # 0.03 → 0.01

@@ -1,0 +1,36 @@
+model_checkpoint:
+  _target_: pytorch_lightning.callbacks.ModelCheckpoint
+  dirpath: "${hydra:runtime.output_dir}/checkpoints"
+  filename: "epoch={epoch}-val_loss={val_loss:.3f}"
+  monitor: "val/loss"
+  mode: "min"
+  save_top_k: 3
+  save_last: true
+
+lr_monitor:
+  _target_: pytorch_lightning.callbacks.LearningRateMonitor
+  logging_interval: "step"
+
+early_stopping:
+  _target_: pytorch_lightning.callbacks.EarlyStopping
+  monitor: "val/loss"
+  patience: 7
+  mode: "min"
+
+rich_progress_bar:
+  _target_: pytorch_lightning.callbacks.RichProgressBar
+
+custom:
+  heatmap_logger:
+    _target_: development.core.callbacks.heatmap_logger.HeatmapLogger
+    mode: "per_channel" # kept for compatibility, currently logs per-frame images
+    num_samples: 2 # number of sequences sampled per epoch
+    upsample_to: 512
+    normalize_each: True
+    stage_prefix: "Val"
+    log_input: True
+    image_tag: "Input"
+    pred_tag: "Pred"
+    target_tag: "GT"
+    every_n_epochs: 1
+    rng_seed: 1234
