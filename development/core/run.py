@@ -20,8 +20,6 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _merge_experiment_config(cfg: DictConfig) -> DictConfig:
-    """Merge the core config with an experiment-specific layer when provided."""
-
     exp_dir = cfg.get("experiment_config_dir")
     if not exp_dir:
         return cfg
@@ -33,12 +31,23 @@ def _merge_experiment_config(cfg: DictConfig) -> DictConfig:
     core_config_dir = Path(__file__).resolve().parent / "configs"
     search_override = f"hydra.searchpath=[file://{core_config_dir.as_posix()}, file://{abs_exp_dir.as_posix()}]"
 
-    # Compose the experiment config using its own search path, then merge with the runtime cfg
     GlobalHydra.instance().clear()
     with initialize_config_dir(version_base=None, config_dir=str(abs_exp_dir)):
         exp_cfg = compose(config_name="config", overrides=[search_override])
 
-    merged = OmegaConf.merge(exp_cfg, cfg)
+    # ★ マージ前だけ struct を解除
+    prev_exp = OmegaConf.is_struct(exp_cfg)
+    prev_run = OmegaConf.is_struct(cfg)
+    OmegaConf.set_struct(exp_cfg, False)
+    OmegaConf.set_struct(cfg, False)
+    try:
+        merged = OmegaConf.merge(cfg, exp_cfg)
+    finally:
+        OmegaConf.set_struct(exp_cfg, prev_exp)
+        OmegaConf.set_struct(cfg, prev_run)
+
+    # ★ マージ後は再び凍結（ここからはタイプミス検知が効く）
+    OmegaConf.set_struct(merged, True)
     return merged  # type: ignore[return-value]
 
 
@@ -79,7 +88,6 @@ def _build_logger(logger_cfg: DictConfig | None) -> TensorBoardLogger:
         version=version,
         log_graph=log_graph,
         default_hp_metric=default_hp_metric,
-        log_model=log_model,
     )
 
 
@@ -133,13 +141,15 @@ def _run(cfg: DictConfig) -> None:
     lit_module_cfg = full_cfg.get("lit_module")
     if lit_module_cfg is None:
         raise ValueError("lit_module configuration must be provided by the experiment.")
+    print(OmegaConf.to_yaml(lit_module_cfg))
     lit_module = instantiate(
         lit_module_cfg,
-        config=full_cfg,
+        cfg=full_cfg,
         model=model,
         loss_fn=loss_fn,
         metric_fns=metrics,
         _convert_="partial",
+        _recursive_=False,
     )
     _describe_component("LightningModule", lit_module)
 

@@ -26,11 +26,10 @@ def create_model(**kwargs: Any) -> SequenceHeatmapNet:
     """Instantiate the sequential heatmap network with resolved paths."""
 
     params = dict(kwargs)
-    params.setdefault("repo_dir", NetConfig.repo_dir)
-    params.setdefault("weights", NetConfig.weights)
-
-    params["repo_dir"] = _resolve_path(params["repo_dir"])
-    params["weights"] = _resolve_path(params["weights"])
+    if "repo_dir" in params:
+        params["repo_dir"] = _resolve_path(params["repo_dir"])
+    if "weights" in params:
+        params["weights"] = _resolve_path(params["weights"])
 
     cfg = NetConfig(**params)
     return SequenceHeatmapNet(cfg)
@@ -38,20 +37,22 @@ def create_model(**kwargs: Any) -> SequenceHeatmapNet:
 
 def create_lit_module(
     *,
-    config: Mapping[str, Any],
+    cfg: Mapping[str, Any],
     model: SequenceHeatmapNet,
     loss_fn,
     metric_fns: Mapping[str, Any] | None = None,
     target_key: str = "heatmaps",
+    include_inputs: bool = True,
 ) -> SequenceHeatmapLitModule:
     """Factory matching the signature expected by ``development.core.run``."""
 
     return SequenceHeatmapLitModule(
-        config=config,
+        config=cfg,
         model=model,
         loss_fn=loss_fn,
         metric_fns=dict(metric_fns or {}),
         target_key=target_key,
+        include_inputs=include_inputs,
     )
 
 
