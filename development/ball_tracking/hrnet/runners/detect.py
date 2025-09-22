@@ -19,7 +19,7 @@ sys.path.append(os.path.normpath(wasb_src_path))
 
 from detectors import build_detector
 from trackers import build_tracker
-from utils.image import get_affine_transform, affine_transform
+from utils.image import get_affine_transform
 from .base import BaseRunner
 
 log = logging.getLogger(__name__)
@@ -37,8 +37,14 @@ def get_transform(img_shape, input_wh, inv=0):
 class DetectRunner(BaseRunner):
     def __init__(self, cfg: DictConfig):
         super().__init__(cfg)
-        self.device = torch.device(cfg.runner.device)
-        self.detector = build_detector(cfg).to(self.device)
+
+        requested_device = cfg.runner.device
+        if requested_device == "cuda" and not torch.cuda.is_available():
+            log.warning("CUDA requested but no GPU is available. Falling back to CPU execution.")
+            requested_device = "cpu"
+
+        self.device = torch.device(requested_device)
+        self.detector = build_detector(cfg)
         self.tracker = build_tracker(cfg)
 
         self.img_transforms = T.Compose([
@@ -72,7 +78,7 @@ class DetectRunner(BaseRunner):
 
         # Heatmap transform (assuming output size is 1/4 of input)
         output_w, output_h = self._cfg.model.out_width, self._cfg.model.out_height
-        trans_output = get_transform((video_height, video_width), (output_w, output_h))
+        trans_output_inv = get_transform((video_height, video_width), (output_w, output_h), inv=1)
 
         frame_buffer = deque(maxlen=frames_in)
 
@@ -93,11 +99,16 @@ class DetectRunner(BaseRunner):
                 continue
 
             # Inference
-            input_tensor = torch.stack(list(frame_buffer), dim=0).unsqueeze(0)
+            # the detector expects frames concatenated along the channel axis
+            input_tensor = torch.cat(list(frame_buffer), dim=0).unsqueeze(0)
 
             # The second argument to run_tensor is a dictionary of output transforms
             # For now, we only have one scale.
-            trans_outputs = {self._cfg.model.out_scales[0]: trans_output}
+            trans_outputs = {
+                self._cfg.model.out_scales[0]: torch.tensor(
+                    trans_output_inv, dtype=torch.float32, device=self.device
+                ).unsqueeze(0)
+            }
 
             batch_results, _ = self.detector.run_tensor(input_tensor, trans_outputs)
 
@@ -113,11 +124,7 @@ class DetectRunner(BaseRunner):
             if tracked_results and tracked_results["visi"]:
                 x, y = tracked_results["x"], tracked_results["y"]
 
-                # Transform coordinates back to original frame size
-                pt_out = np.array([x, y], dtype=np.float32)
-                pt_in = affine_transform(pt_out, trans_input_inv)
-
-                px, py = int(pt_in[0]), int(pt_in[1])
+                px, py = int(round(x)), int(round(y))
 
                 cv2.circle(frame, (px, py), 5, (0, 0, 255), -1)
                 cv2.putText(frame, f"({px}, {py})", (px + 10, py - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
