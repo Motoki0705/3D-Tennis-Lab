@@ -1,18 +1,40 @@
+# @package _global_
+
 defaults:
-  - callbacks: default
-  - data: dino_detr
-  - model: dino_detr
-  - infer: default
+  - override /data: dino_detr
+  - override /model: dino_detr
+  - override /training: dino_detr
+  - override /callbacks: lightning_default
   - _self_
 
-# Hydra root config for dino_detr
-task: train # train | infer
-experiment_name: dino_detr
+project: "player_analysis"
+experiment: "dino_detr"
+task: train
 device: auto
 
-training:
-  max_epochs: 50
-  accelerator: auto
-  devices: 1
-  precision: 32
-  grad_clip_val: 0.0
+callbacks:
+  custom:
+    detection_logger:
+      _target_: development.player_analysis.dino_detr.callbacks.tb_image_logger.TensorBoardDetectionImageLogger
+      every_n_steps: 200
+      num_samples: 2
+      mode: val
+
+datamodule:
+  _target_: development.player_analysis.dino_detr.training.datamodule.build_datamodule
+  cfg_like: ${data}
+
+model:
+  _target_: development.player_analysis.dino_detr.model.factory.create_model
+  cfg_like: ${model}
+  device: ${device}
+
+loss:
+  _target_: development.player_analysis.dino_detr.model.factory.create_loss
+  cfg_like: ${model}
+  device: ${device}
+
+lit_module:
+  _target_: development.player_analysis.dino_detr.model.factory.create_lit_module
+
+metrics: {}

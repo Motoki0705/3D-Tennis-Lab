@@ -1,32 +1,31 @@
-import logging
-from typing import Literal
+"""Compatibility wrapper that redirects to the shared core runner."""
 
-import hydra
-from omegaconf import DictConfig
-import torch
+from __future__ import annotations
 
-torch.set_float32_matmul_precision("medium")
-logger = logging.getLogger(__name__)
+import sys
+from pathlib import Path
 
 
-def _dispatch(task: Literal["train", "infer"], cfg: DictConfig):
-    if task == "train":
-        from .runner.train import TrainRunner
-
-        TrainRunner(cfg).run()
-    elif task == "infer":
-        from .runner.infer import InferRunner
-
-        InferRunner(cfg).run()
-    else:
-        raise ValueError(f"Unknown task: {task}")
+def _ensure_override(args: list[str], key: str, value: str) -> None:
+    prefix = f"{key}=" if not key.startswith("+") else key
+    if any(arg.startswith(prefix) for arg in args):
+        return
+    args.append(f"{key}{value}" if key.startswith("+") else f"{key}={value}")
 
 
-@hydra.main(config_path="configs", config_name="config", version_base=None)
-def main(cfg: DictConfig):
-    task = cfg.get("task", "train")
-    logger.info(f"Running task: {task}")
-    _dispatch(task, cfg)
+def main() -> None:
+    exp_dir = Path(__file__).resolve().parent / "configs"
+
+    overrides = list(sys.argv[1:])
+    _ensure_override(overrides, "+experiment_config_dir=", exp_dir.as_posix())
+    _ensure_override(overrides, "project", "player_analysis")
+    _ensure_override(overrides, "experiment", "dino_detr")
+
+    sys.argv = [sys.argv[0], *overrides]
+
+    from development.core import run as core_run
+
+    core_run.main()
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-# Local DETR (model/detr.py) config
+# DINO-DETR model hyper-parameters.
 
 # Transformer / DETR core
 hidden_dim: 256
@@ -20,19 +20,20 @@ giou_loss_coef: 2.0
 mask_loss_coef: 1.0
 dice_loss_coef: 1.0
 
-# Model behavior
+# Model behaviour
 num_queries: 100
 aux_loss: true
 masks: false
 frozen_weights: null
 lr_backbone: 0.0
+
+# Dataset metadata
+num_classes: 1
 dataset_file: coco
 
-# DINOv3 backbone source (configurable)
+# Criterion configuration
+eos_coef: 0.1
+
 dino_repo_dir: third_party/dinov3
 dino_model_name: dinov3_vitl16
-
-# Optimizer (read in LightningModule)
-lr: 1e-4
-weight_decay: 1e-4
-betas: [0.9, 0.999]
+device: cuda
