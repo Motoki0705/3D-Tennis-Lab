@@ -1,0 +1,9 @@
+reconstruction:
+  format: parquet
+  path: ${workspace.outputs}/recon_3d
+tracks:
+  format: json
+  path: ${workspace.outputs}/tracks_2d
+visualization:
+  overlay_video: true
+  render3d_backend: open3d

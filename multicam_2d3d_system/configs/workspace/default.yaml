@@ -1,0 +1,3 @@
+root: /path/to/workdir
+outputs: ${workspace.root}/outputs
+cache: ${workspace.root}/cache

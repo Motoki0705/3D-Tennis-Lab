@@ -1,0 +1,10 @@
+reference_camera: cam_01
+max_offset_ms: 10
+max_drift_ppm: 5
+interpolation:
+  strategy: linear
+  window: 5
+  extrapolate: false
+quality_checks:
+  min_overlap_seconds: 15
+  log_dir: ${workspace.outputs}/sync
