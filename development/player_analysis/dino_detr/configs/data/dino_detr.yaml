@@ -1,0 +1,22 @@
+# COCO-style dataset specification for the DINO-DETR experiment.
+images_root: data/processed/ball/images
+labeled_json: data/processed/ball/annotations.json
+train_json: null
+val_json: null
+val_ratio: 0.1
+split_seed: 42
+img_size: [720, 1280]
+batch_size: 2
+num_workers: 4
+augmentation:
+  p_horizontal_flip: 0.5
+  p_affine: 0.4
+  scale_limit: 0.1
+  shift_limit: 0.1
+  p_blur: 0.1
+  blur_limit: 3
+  p_color_jitter: 0.2
+  brightness_limit: 0.1
+  contrast_limit: 0.1
+  saturation_limit: 0.05
+  hue_limit: 0.03
