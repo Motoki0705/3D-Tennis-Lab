@@ -1,0 +1,15 @@
+pred_gt_overlay_logger:
+  _target_: development.core.callbacks.plaggable_logger.HeatmapLoggerPluggable
+  max_samples: 2
+  render_fn:
+    _target_: development.player_analysis.dino_detr.callbacks.bbox_render.render_pred_gt_bboxes_overlay_dict
+    tag: PredGTOverlay
+    image_key: images
+    pred_bboxes_key: pred_bboxes
+    gt_bboxes_key: target_bboxes
+    pred_labels_key: class_labels # あれば
+    pred_scores_key: null # 例: スコアをログに出したいなら "pred_scores" などに
+    assume_xyxy: true
+    pred_color: red
+    gt_color: blue
+    linewidth: 2

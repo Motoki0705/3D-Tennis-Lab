@@ -3,9 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Mapping
 
-import pytorch_lightning as pl
 import torch
-import torch.optim as optim
 
 try:
     from omegaconf import DictConfig, OmegaConf
@@ -14,6 +12,8 @@ except Exception:  # pragma: no cover - OmegaConf not installed
     OmegaConf = None  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+from development.core.lightning.base_lit_module import BaseLitModule
 
 
 def _to_dict(cfg_like: Any) -> Dict[str, Any]:
@@ -29,7 +29,7 @@ def _to_dict(cfg_like: Any) -> Dict[str, Any]:
     return {}
 
 
-class DinoDetrLitModule(pl.LightningModule):
+class DinoDetrLitModule(BaseLitModule):
     """Lightning module wrapper for the DINO-DETR detector."""
 
     def __init__(
@@ -41,30 +41,8 @@ class DinoDetrLitModule(pl.LightningModule):
         metric_fns: Mapping[str, Any] | None = None,
         postprocessors: Mapping[str, Any] | None = None,
     ) -> None:
-        super().__init__()
-        self.save_hyperparameters(logger=False)
-        self.cfg = cfg
-        self.model = model
-        self.criterion = loss_fn
-        self.metric_fns = dict(metric_fns or {})
+        super().__init__(config=cfg, model=model, loss_fn=loss_fn, metric_fns=dict(metric_fns or {}))
         self.postprocessors = dict(postprocessors or {})
-
-        training_cfg = _to_dict(getattr(cfg, "training", {}))
-        self._training_cfg = training_cfg
-        optimizer_cfg = _to_dict(training_cfg.get("optimizer"))
-
-        lr_default = optimizer_cfg.get("lr", optimizer_cfg.get("learning_rate", 1.0e-4))
-        self.lr = float(lr_default)
-        self.weight_decay = float(optimizer_cfg.get("weight_decay", 1.0e-4))
-        betas = optimizer_cfg.get("betas", (0.9, 0.999))
-        if isinstance(betas, (list, tuple)) and len(betas) >= 2:
-            self.betas = (float(betas[0]), float(betas[1]))
-        else:
-            self.betas = (0.9, 0.999)
-
-        self.max_epochs = int(training_cfg.get("max_epochs", 50))
-        self.warmup_epochs = int(training_cfg.get("warmup_epochs", 0))
-        self.cosine_eta_min = float(training_cfg.get("eta_min", 1.0e-6))
 
     # ------------------------------------------------------------------
     # Lightning hooks
@@ -90,8 +68,16 @@ class DinoDetrLitModule(pl.LightningModule):
         return total_loss
 
     def validation_step(self, batch, batch_idx: int):
-        images, targets = batch
+        images, targets = batch  # images: Tensor[N,3,H,W], targets: list[dict]
+
+        # -------------------------
+        # forward
+        # -------------------------
         outputs = self.model(images)
+
+        # -------------------------
+        # compute loss
+        # -------------------------
         norm_targets = self._normalise_targets(images, targets)
         loss_dict = self.criterion(outputs, norm_targets)
         val_loss = self._sum_and_log_losses(
@@ -102,50 +88,63 @@ class DinoDetrLitModule(pl.LightningModule):
             on_epoch=True,
         )
         self.log("val/loss", val_loss, on_step=False, on_epoch=True, prog_bar=True, batch_size=len(images))
+
+        # metrics (必要なら)
         self._log_metrics(outputs, targets, prefix="val", on_step=False)
-        return val_loss
 
-    # ------------------------------------------------------------------
-    # Optimiser & scheduler
-    # ------------------------------------------------------------------
-
-    def configure_optimizers(self):
-        optimizer = optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay, betas=self.betas)
-
-        warmup_epochs = max(0, int(self.warmup_epochs))
-        max_epochs = max(1, int(self.max_epochs))
-        cosine_eta_min = float(self.cosine_eta_min)
-
-        schedulers = []
-        milestones = []
-        if warmup_epochs > 0:
-            warmup = optim.lr_scheduler.LinearLR(
-                optimizer,
-                start_factor=0.01,
-                end_factor=1.0,
-                total_iters=warmup_epochs,
-            )
-            schedulers.append(warmup)
-            milestones.append(warmup_epochs)
-
-        cosine = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer,
-            T_max=max(1, max_epochs - warmup_epochs),
-            eta_min=cosine_eta_min,
+        # -------------------------
+        # PostProcess → 画像スケール xyxy に変換
+        # -------------------------
+        target_sizes = torch.tensor(
+            [[img.shape[-2], img.shape[-1]] for img in images],
+            dtype=torch.float32,
+            device=images.device,
         )
-        sched = (
-            optim.lr_scheduler.SequentialLR(optimizer, schedulers=schedulers + [cosine], milestones=milestones)
-            if schedulers
-            else cosine
-        )
+        results = self.postprocessors["bbox"](outputs, target_sizes)  # list[dict]
 
+        # -------------------------
+        # 可視化用: Top-K 固定長化
+        # -------------------------
+        Kp, Kg = 50, 50  # 予測/GT の上限数
+        pred_boxes, pred_labels, pred_scores = [], [], []
+        for det in results:
+            b, l, s = det["boxes"], det["labels"], det["scores"]
+            # Top-K
+            idx = torch.argsort(s, descending=True)[:Kp]
+            b, l, s = b[idx], l[idx], s[idx]
+            # パディング
+            pad = Kp - b.size(0)
+            if pad > 0:
+                b = torch.cat([b, b.new_zeros(pad, 4)], dim=0)
+                l = torch.cat([l, l.new_full((pad,), -1)], dim=0)
+                s = torch.cat([s, s.new_zeros(pad)], dim=0)
+            pred_boxes.append(b)
+            pred_labels.append(l)
+            pred_scores.append(s)
+        pred_boxes = torch.stack(pred_boxes, 0)  # [N,Kp,4]
+        pred_labels = torch.stack(pred_labels, 0)  # [N,Kp]
+        pred_scores = torch.stack(pred_scores, 0)  # [N,Kp]
+
+        gt_boxes = []
+        for t in targets:
+            b = t["boxes"]
+            if b.size(0) > Kg:
+                b = b[:Kg]
+            elif b.size(0) < Kg:
+                pad = Kg - b.size(0)
+                b = torch.cat([b, b.new_zeros(pad, 4)], dim=0)
+            gt_boxes.append(b)
+        gt_boxes = torch.stack(gt_boxes, 0)  # [N,Kg,4]
+
+        # -------------------------
+        # return dict for renderer
+        # -------------------------
         return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": sched,
-                "interval": "epoch",
-                "monitor": "val/loss",
-            },
+            "images": images.clamp(0, 1),  # [N,3,H,W]
+            "pred_bboxes": pred_boxes,  # [N,Kp,4] xyxy
+            "class_labels": pred_labels,  # [N,Kp]
+            "pred_scores": pred_scores,  # [N,Kp]
+            "target_bboxes": gt_boxes,  # [N,Kg,4]
         }
 
     # ------------------------------------------------------------------

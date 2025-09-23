@@ -1,10 +1,9 @@
 # @package _global_
 
 defaults:
-  - override /data: dino_detr
-  - override /model: dino_detr
-  - override /training: dino_detr
-  - override /callbacks: lightning_default
+  - model: dino_detr
+  - data: coco_player_core
+  - callbacks: lightning_default
   - _self_
 
 project: "player_analysis"
@@ -20,8 +19,10 @@ callbacks:
       num_samples: 2
       mode: val
 
+# Core datamodule built via factory with augmentations
+# Edit paths to your dataset as needed.
 datamodule:
-  _target_: development.player_analysis.dino_detr.training.datamodule.build_datamodule
+  _target_: development.core.data_core.build.build_datamodule
   cfg_like: ${data}
 
 model:

@@ -5,7 +5,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, Mapping, Optional
 
-import torch.nn as nn
 
 try:
     from hydra.utils import to_absolute_path as hydra_to_absolute_path
@@ -18,15 +17,15 @@ except Exception:  # pragma: no cover - OmegaConf not installed
     DictConfig = ()  # type: ignore
     OmegaConf = None  # type: ignore
 
-from ..training.lit_module import DinoDetrLitModule
-from .detr import DETR, DETRsegm, PostProcess, PostProcessPanoptic, PostProcessSegm, SetCriterion
+from ..lightning.lit_module import DinoDetrLitModule
+from .dino_detr import DINODETR, DETRsegm, PostProcess, PostProcessPanoptic, PostProcessSegm, SetCriterion
 from .dino_backbone import build_dino_backbone
 from .matcher import build_matcher
 from .transformer import build_transformer
 
 
 @dataclass
-class ModelConfigData:
+class DINODETRConfig:
     hidden_dim: int = 256
     dropout: float = 0.1
     nheads: int = 8
@@ -58,18 +57,6 @@ class ModelConfigData:
     device: str = "cuda"
 
 
-class DinoDetrModel(nn.Module):
-    """Wrapper that exposes DETR network with attached post-processors."""
-
-    def __init__(self, model: nn.Module, postprocessors: Mapping[str, Any]) -> None:
-        super().__init__()
-        self.model = model
-        self.postprocessors = dict(postprocessors)
-
-    def forward(self, images):  # type: ignore[override]
-        return self.model(images)
-
-
 def _to_dict(cfg_like: Any) -> Dict[str, Any]:
     if cfg_like is None:
         return {}
@@ -91,9 +78,9 @@ def _resolve_path(path: Optional[str]) -> Optional[str]:
     return str(Path(str(path)).expanduser().resolve())
 
 
-def _parse_model_config(cfg_like: Any) -> ModelConfigData:
+def _parse_model_config(cfg_like: Any) -> DINODETRConfig:
     data = _to_dict(cfg_like)
-    defaults = ModelConfigData()
+    defaults = DINODETRConfig()
 
     def _get(key: str, cast, default):
         if key not in data or data[key] is None:
@@ -101,7 +88,7 @@ def _parse_model_config(cfg_like: Any) -> ModelConfigData:
         return cast(data[key])
 
     num_classes = data.get("num_classes")
-    parsed = ModelConfigData(
+    parsed = DINODETRConfig(
         hidden_dim=int(data.get("hidden_dim", defaults.hidden_dim)),
         dropout=float(data.get("dropout", defaults.dropout)),
         nheads=int(data.get("nheads", defaults.nheads)),
@@ -133,7 +120,7 @@ def _parse_model_config(cfg_like: Any) -> ModelConfigData:
     return parsed
 
 
-def _build_args(cfg: ModelConfigData, device_override: Optional[str]) -> SimpleNamespace:
+def _build_args(cfg: DINODETRConfig, device_override: Optional[str]) -> SimpleNamespace:
     return SimpleNamespace(
         hidden_dim=cfg.hidden_dim,
         dropout=cfg.dropout,
@@ -162,29 +149,19 @@ def _build_args(cfg: ModelConfigData, device_override: Optional[str]) -> SimpleN
     )
 
 
-def _infer_num_classes(cfg: ModelConfigData) -> int:
+def _infer_num_classes(cfg: DINODETRConfig) -> int:
     if cfg.num_classes is not None:
         return int(cfg.num_classes)
     return 91 if cfg.dataset_file == "coco" else 20
 
 
-def _build_postprocessors(cfg: ModelConfigData) -> Dict[str, Any]:
-    postprocessors: Dict[str, Any] = {"bbox": PostProcess()}
-    if cfg.masks:
-        postprocessors["segm"] = PostProcessSegm()
-        if cfg.dataset_file == "coco_panoptic":
-            is_thing_map = {i: i <= 90 for i in range(201)}
-            postprocessors["panoptic"] = PostProcessPanoptic(is_thing_map, threshold=0.85)
-    return postprocessors
-
-
-def create_model(cfg_like: Any, *, device: Optional[str] = None) -> DinoDetrModel:
+def create_model(cfg_like: Any, *, device: Optional[str] = None) -> DINODETR:
     model_cfg = _parse_model_config(cfg_like)
     args = _build_args(model_cfg, device_override=device)
     backbone = build_dino_backbone(args)
     transformer = build_transformer(args)
     num_classes = _infer_num_classes(model_cfg)
-    model = DETR(
+    model = DINODETR(
         backbone,
         transformer,
         num_classes=num_classes,
@@ -193,8 +170,7 @@ def create_model(cfg_like: Any, *, device: Optional[str] = None) -> DinoDetrMode
     )
     if model_cfg.masks:
         model = DETRsegm(model, freeze_detr=(model_cfg.frozen_weights is not None))
-    postprocessors = _build_postprocessors(model_cfg)
-    return DinoDetrModel(model, postprocessors)
+    return model
 
 
 def create_loss(cfg_like: Any, *, device: Optional[str] = None):
@@ -233,15 +209,26 @@ def create_loss(cfg_like: Any, *, device: Optional[str] = None):
     return criterion
 
 
+def create_postprocessors(cfg_like: DINODETRConfig) -> Dict[str, Any]:
+    cfg = _parse_model_config(cfg_like)
+    postprocessors: Dict[str, Any] = {"bbox": PostProcess()}
+    if cfg.masks:
+        postprocessors["segm"] = PostProcessSegm()
+        if cfg.dataset_file == "coco_panoptic":
+            is_thing_map = {i: i <= 90 for i in range(201)}
+            postprocessors["panoptic"] = PostProcessPanoptic(is_thing_map, threshold=0.85)
+    return postprocessors
+
+
 def create_lit_module(
     *,
     cfg: Any,
-    model: DinoDetrModel,
+    model: DINODETR,
     loss_fn,
     metric_fns: Mapping[str, Any] | None = None,
 ) -> DinoDetrLitModule:
     model_cfg = _parse_model_config(getattr(cfg, "model", {}))
-    postprocessors = getattr(model, "postprocessors", None) or _build_postprocessors(model_cfg)
+    postprocessors = getattr(model, "postprocessors", None) or create_postprocessors(model_cfg)
     return DinoDetrLitModule(
         cfg=cfg,
         model=model,
@@ -251,4 +238,4 @@ def create_lit_module(
     )
 
 
-__all__ = ["create_model", "create_loss", "create_lit_module", "DinoDetrModel"]
+__all__ = ["create_model", "create_loss", "create_postprocessors"]

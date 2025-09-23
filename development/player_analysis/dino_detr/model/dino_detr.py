@@ -22,7 +22,7 @@ from .segmentation import DETRsegm, PostProcessPanoptic, PostProcessSegm, dice_l
 from .transformer import build_transformer
 
 
-class DETR(nn.Module):
+class DINODETR(nn.Module):
     """This is the DETR module that performs object detection"""
 
     def __init__(self, backbone, transformer, num_classes, num_queries, aux_loss=False):
@@ -325,7 +325,7 @@ def build(args):
 
     transformer = build_transformer(args)
 
-    model = DETR(
+    model = DINODETR(
         backbone,
         transformer,
         num_classes=num_classes,
