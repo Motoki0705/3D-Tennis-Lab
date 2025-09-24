@@ -36,6 +36,9 @@ augment:
   use_replay: true
   bbox_format: coco
   bbox_label_fields: [classes]
+  bbox_field: bboxes
+  class_field: classes
+
 
 # Optional dataloader/split settings compatible with BaseDataModule
 splits:

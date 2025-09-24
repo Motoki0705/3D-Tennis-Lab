@@ -113,11 +113,13 @@ def _build_augment_bundle(spec: Mapping[str, Any]):
     else:
         raise ValueError(f"Unknown augment bundle '{bundle_name}'. Use standard|light|eval")
     tfms = bundle()
+    bbox_field = spec.get("bbox_field", "bboxes")
+    class_field = spec.get("class_field", "classes")
     return {
-        "train": make_clip_replay_adapter(tfms["train"], bboxes_field="bboxes", classes_field="class_labels"),
-        "val": make_clip_replay_adapter(tfms["val"], bboxes_field="bboxes", classes_field="class_labels"),
+        "train": make_clip_replay_adapter(tfms["train"], bboxes_field=bbox_field, classes_field=class_field),
+        "val": make_clip_replay_adapter(tfms["val"], bboxes_field=bbox_field, classes_field=class_field),
         "test": make_clip_replay_adapter(
-            tfms.get("test", tfms["val"]), bboxes_field="bboxes", classes_field="class_labels"
+            tfms.get("test", tfms["val"]), bboxes_field=bbox_field, classes_field=class_field
         ),
     }
 
