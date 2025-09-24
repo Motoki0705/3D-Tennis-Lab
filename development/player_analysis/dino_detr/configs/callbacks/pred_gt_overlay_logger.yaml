@@ -13,3 +13,18 @@ custom:
     pred_color: red
     gt_color: blue
     linewidth: 2
+
+model_checkpoint:
+  _target_: pytorch_lightning.callbacks.ModelCheckpoint
+  dirpath: "${hydra:runtime.output_dir}/checkpoints"
+  filename: "epoch={epoch}-val_loss={val/loss:.3f}"
+  monitor: "vak/loss"
+  mode: "min"
+  save_top_k: 3
+  save_last: true
+
+early_stopping:
+_target_: pytorch_lightning.callbacks.EarlyStopping
+monitor: "val/loss"
+patience: 5
+mode: "min"
