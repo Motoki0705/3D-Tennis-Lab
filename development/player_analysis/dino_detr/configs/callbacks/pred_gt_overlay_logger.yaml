@@ -1,4 +1,4 @@
-pred_gt_overlay_logger:
+custom:
   _target_: development.core.callbacks.plaggable_logger.HeatmapLoggerPluggable
   max_samples: 2
   render_fn:

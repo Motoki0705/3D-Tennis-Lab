@@ -1,6 +1,6 @@
 # Base Hydra experiment configuration shared across 3D Tennis Lab projects.
 defaults:
-  - data: ball
+  - data: null
   - training: lightning_default
   - callbacks: lightning_default
   - _self_

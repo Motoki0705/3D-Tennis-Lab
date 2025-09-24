@@ -1,7 +1,7 @@
 # @package _global_
 
 defaults:
-  - model: dino_detr
+  - model_cfg: dino_detr
   - data: coco_player_core
   - callbacks: lightning_default
   - _self_
@@ -9,15 +9,7 @@ defaults:
 project: "player_analysis"
 experiment: "dino_detr"
 task: train
-device: auto
-
-callbacks:
-  custom:
-    detection_logger:
-      _target_: development.player_analysis.dino_detr.callbacks.tb_image_logger.TensorBoardDetectionImageLogger
-      every_n_steps: 200
-      num_samples: 2
-      mode: val
+device: cuda
 
 # Core datamodule built via factory with augmentations
 # Edit paths to your dataset as needed.
@@ -27,12 +19,12 @@ datamodule:
 
 model:
   _target_: development.player_analysis.dino_detr.model.factory.create_model
-  cfg_like: ${model}
+  cfg_like: ${model_cfg}
   device: ${device}
 
 loss:
   _target_: development.player_analysis.dino_detr.model.factory.create_loss
-  cfg_like: ${model}
+  cfg_like: ${model_cfg}
   device: ${device}
 
 lit_module:

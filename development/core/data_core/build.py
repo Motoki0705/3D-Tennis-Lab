@@ -11,7 +11,6 @@ from ..collate import batch
 
 from importlib import import_module
 from typing import Iterable, Mapping
-from hydra.utils import instantiate
 
 from ..lightning.base_datamodule import BaseDataModule
 from ..augment.augmentations import (
@@ -57,12 +56,6 @@ def build_dataset(name: str, /, **kwargs: Any) -> Any:
     return builder(**kwargs)
 
 
-def build_collate_fn(spec: Any) -> Callable[[Iterable[Any]], Any]:
-    if spec is None:
-        return None
-    return instantiate(spec)
-
-
 def _ensure_dataset_registered(name: str, *, register: Mapping[str, Any] | None = None) -> None:
     key = name.lower()
     if key in DATASET_REGISTRY:
@@ -70,22 +63,10 @@ def _ensure_dataset_registered(name: str, *, register: Mapping[str, Any] | None 
     if not register:
         available = ", ".join(sorted(DATASET_REGISTRY))
         raise KeyError(f"Unknown dataset '{name}'. Provide register={{...}} or use one of: {available}")
-    builder_path = register.get("builder")
-    if not builder_path:
-        target = register.get("target") or register.get("callable")
-        if target:
-            module_path, _, attr = str(target).rpartition(":")
-            if not module_path:
-                module_path, _, attr = str(target).rpartition(".")
-            fn = getattr(import_module(module_path), attr)
-            # optional name override
-            reg_name = str(register.get("name", name))
-            register_dataset(reg_name, fn)
-            return
-        raise ValueError("register mapping must include 'builder' class path or 'target' callable path")
-    module_path, _, attr = str(builder_path).rpartition(":")
+    target_path = register.get("target")
+    module_path, _, attr = str(target_path).rpartition(":")
     if not module_path:
-        module_path, _, attr = str(builder_path).rpartition(".")
+        module_path, _, attr = str(target_path).rpartition(".")
     cls = getattr(import_module(module_path), attr)
     reg_name = str(register.get("name", name))
     register_dataset(reg_name, cls)
@@ -97,16 +78,14 @@ def _ensure_collate_fn_registered(name: str, *, register: Mapping[str, Any] | No
         return
     if not register:
         available = ", ".join(sorted(COLLATE_FN_REGISTRY))
-        raise KeyError(f"Unknown collate function '{name}'. Provide register={{...}} or use one of: {available}")
-    target = register.get("target") or register.get("callable")
-    if not target:
-        raise ValueError("register mapping must include 'target' callable path")
-    module_path, _, attr = str(target).rpartition(":")
+        raise KeyError(f"Unknown dataset '{name}'. Provide register={{...}} or use one of: {available}")
+    target_path = register.get("target")
+    module_path, _, attr = str(target_path).rpartition(":")
     if not module_path:
-        module_path, _, attr = str(target).rpartition(".")
-    fn = getattr(import_module(module_path), attr)
+        module_path, _, attr = str(target_path).rpartition(".")
+    cls = getattr(import_module(module_path), attr)
     reg_name = str(register.get("name", name))
-    register_collate_fn(reg_name, fn)
+    register_dataset(reg_name, cls)
 
 
 def _build_augment_bundle(spec: Mapping[str, Any]):
@@ -124,6 +103,7 @@ def _build_augment_bundle(spec: Mapping[str, Any]):
         bbox_format=spec.get("bbox_format"),
         bbox_label_fields=tuple(spec.get("bbox_label_fields", ())),
     )
+    print(kwargs)
     if bundle_name == "standard":
         bundle = StandardAugmentations(**kwargs)
     elif bundle_name == "light":
@@ -168,7 +148,7 @@ def build_datamodule(
     data_cfg = _to_dict(cfg_like)
     dataset_name = str(data_cfg.get("dataset_name", "")).lower()
     dataset_register = data_cfg.get("dataset_register", None)
-    collate_fn_name = data_cfg.get("collate_fn", None)
+    collate_fn_name = data_cfg.get("collate_fn_name", None).lower()
     collate_fn_register = data_cfg.get("collate_fn_register", None)
     dataset = data_cfg.get("dataset", {})
     augment = data_cfg.get("augment", {})
@@ -183,6 +163,7 @@ def build_datamodule(
 
     collate_fn = COLLATE_FN_REGISTRY.get(collate_fn_name) if collate_fn_name else None
 
+    print(data_cfg)
     return BaseDataModule(
         config=data_cfg,
         dataset=full_dataset,

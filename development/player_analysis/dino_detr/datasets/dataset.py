@@ -104,6 +104,7 @@ class CocoDetectionDataset(PlayerSequenceDataset):
             # list[T] of Tensor[Mi,4] / Tensor[Mi]
             "boxes": boxes_xyxy_T,
             "labels": labels_T,
+            "class_labels": labels_T,
         }
 
         return {

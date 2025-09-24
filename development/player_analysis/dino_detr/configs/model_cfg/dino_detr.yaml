@@ -36,4 +36,5 @@ eos_coef: 0.1
 
 dino_repo_dir: third_party/dinov3
 dino_model_name: dinov3_vitl16
+position_embedding: sine
 device: cuda

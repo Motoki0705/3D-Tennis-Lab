@@ -54,6 +54,7 @@ class DINODETRConfig:
     eos_coef: float = 0.1
     dino_repo_dir: str = "third_party/dinov3"
     dino_model_name: str = "dinov3_vitl16"
+    position_embedding: str = "sine"
     device: str = "cuda"
 
 
@@ -113,6 +114,7 @@ def _parse_model_config(cfg_like: Any) -> DINODETRConfig:
         eos_coef=float(data.get("eos_coef", defaults.eos_coef)),
         dino_repo_dir=str(data.get("dino_repo_dir", defaults.dino_repo_dir)),
         dino_model_name=str(data.get("dino_model_name", defaults.dino_model_name)),
+        position_embedding=str(data.get("position_embedding", defaults.position_embedding)),
         device=str(data.get("device", defaults.device)),
     )
     parsed.dino_repo_dir = _resolve_path(parsed.dino_repo_dir) or defaults.dino_repo_dir
@@ -146,6 +148,7 @@ def _build_args(cfg: DINODETRConfig, device_override: Optional[str]) -> SimpleNa
         device=device_override or cfg.device,
         dino_repo_dir=cfg.dino_repo_dir,
         dino_model_name=cfg.dino_model_name,
+        position_embedding=cfg.position_embedding,
     )
 
 
