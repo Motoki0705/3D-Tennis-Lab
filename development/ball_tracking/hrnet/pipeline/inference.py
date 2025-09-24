@@ -14,7 +14,7 @@ import torchvision.transforms as T
 import sys
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-WASB_SRC = SCRIPT_DIR.parent.parent.parent / "third_party" / "WASB-SBDT" / "src"
+WASB_SRC = SCRIPT_DIR.parent.parent.parent.parent / "third_party" / "WASB-SBDT" / "src"
 sys.path.append(str(WASB_SRC))
 
 from detectors import build_detector  # type: ignore  # noqa: E402
