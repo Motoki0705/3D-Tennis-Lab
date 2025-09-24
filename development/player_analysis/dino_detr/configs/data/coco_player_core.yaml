@@ -1,4 +1,4 @@
-# COCO player dataset via core build factory
+﻿# COCO player dataset via core build factory
 
 # Optional: ensure the dataset class is registered into the core registry.
 # This is needed only if you call build_dataset(name=...) by registry name.
@@ -23,15 +23,17 @@ dataset:
   frame_stride: 1
   target_category: player
   min_box_size: 1.0
-  image_size: [720, 1280]
+  image_size: [320, 640]
   drop_short_clips: false
   allow_partial_last: false
   normalize_mean: [0.485, 0.456, 0.406]
   normalize_std: [0.229, 0.224, 0.225]
+  class_id_remap:
+    2: 0
 
 augment:
   bundle: standard
-  image_size: [720, 1280]
+  image_size: [320, 640]
   targets: [image, bboxes]
   use_replay: true
   bbox_format: coco
@@ -47,7 +49,7 @@ splits:
   test_ratio: 0.1
 
 dataloader:
-  batch_size: 2
+  batch_size: 8
   num_workers: 0
   pin_memory: true
   persistent_workers: false

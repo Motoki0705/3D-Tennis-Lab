@@ -55,7 +55,7 @@ class DinoDetrLitModule(BaseLitModule):
         images, targets = batch
         outputs = self.model(images)
         norm_targets = self._normalise_targets(images, targets)
-        loss_dict = self.criterion(outputs, norm_targets)
+        loss_dict = self.loss_fn(outputs, norm_targets)
         total_loss = self._sum_and_log_losses(
             loss_dict,
             prefix="train",
@@ -79,7 +79,7 @@ class DinoDetrLitModule(BaseLitModule):
         # compute loss
         # -------------------------
         norm_targets = self._normalise_targets(images, targets)
-        loss_dict = self.criterion(outputs, norm_targets)
+        loss_dict = self.loss_fn(outputs, norm_targets)
         val_loss = self._sum_and_log_losses(
             loss_dict,
             prefix="val",

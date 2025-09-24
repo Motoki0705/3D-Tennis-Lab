@@ -49,6 +49,7 @@ class CocoDetectionDataset(PlayerSequenceDataset):
         transform: Optional[Any] = None,
         normalize_mean: Sequence[float] = (0.485, 0.456, 0.406),
         normalize_std: Sequence[float] = (0.229, 0.224, 0.225),
+        class_id_remap: Optional[Mapping[int, int]] = None,
     ) -> None:
         super().__init__(
             annotation_file=annotation_file,
@@ -65,6 +66,8 @@ class CocoDetectionDataset(PlayerSequenceDataset):
             normalize_mean=normalize_mean,
             normalize_std=normalize_std,
         )
+
+        self._class_id_remap = {int(k): int(v) for k, v in (class_id_remap or {}).items()}
 
     # 置き換え版 _finalize_sample（transform後に xywh -> xyxy に統一）
     def _finalize_sample(self, sample, *, payloads, metadata):
@@ -98,7 +101,8 @@ class CocoDetectionDataset(PlayerSequenceDataset):
             boxes_xywh = bboxes_seq[t] or []
             labels = classes_seq[t] or []
             boxes_xyxy_T.append(self._xywh_list_to_xyxy_tensor(boxes_xywh, H=H, W=W, clamp=True))
-            labels_T.append(self._labels_list_to_tensor(labels))
+            mapped_labels = self._remap_labels(labels)
+            labels_T.append(self._labels_list_to_tensor(mapped_labels))
 
         targets = {
             # list[T] of Tensor[Mi,4] / Tensor[Mi]
@@ -113,21 +117,19 @@ class CocoDetectionDataset(PlayerSequenceDataset):
             "metadata": sample.get("metadata", metadata),
         }
 
-    @staticmethod
-    def _xywh_to_xyxy_np(box):
+    def _xywh_to_xyxy_np(self, box):
         # box: [x, y, w, h] (float)
         x, y, w, h = float(box[0]), float(box[1]), float(box[2]), float(box[3])
         return [x, y, x + w, y + h]
 
-    @staticmethod
-    def _xywh_list_to_xyxy_tensor(frame_boxes_xywh, H=None, W=None, clamp=True):
+    def _xywh_list_to_xyxy_tensor(self, frame_boxes_xywh, H=None, W=None, clamp=True):
         """
         frame_boxes_xywh: list[list[4]] (xywh)  -> Tensor[M,4] (xyxy)
         H,W: 画像サイズ（任意）。指定時は [0..W],[0..H] にクリップ。
         """
         if not frame_boxes_xywh:
             return torch.zeros((0, 4), dtype=torch.float32)
-        xyxy = [PlayerSequenceDataset._xywh_to_xyxy_np(b) for b in frame_boxes_xywh]
+        xyxy = [self._xywh_to_xyxy_np(b) for b in frame_boxes_xywh]
         t = torch.tensor(xyxy, dtype=torch.float32)
         if clamp and (H is not None) and (W is not None):
             # [x1,y1,x2,y2] を画像境界にクリップ
@@ -136,6 +138,11 @@ class CocoDetectionDataset(PlayerSequenceDataset):
             t[:, 2] = t[:, 2].clamp_(min=0.0, max=W)
             t[:, 3] = t[:, 3].clamp_(min=0.0, max=H)
         return t
+
+    def _remap_labels(self, frame_labels):
+        if not frame_labels:
+            return []
+        return [self._class_id_remap.get(int(lbl), int(lbl)) for lbl in frame_labels]
 
     @staticmethod
     def _labels_list_to_tensor(frame_labels):

@@ -78,14 +78,14 @@ def _ensure_collate_fn_registered(name: str, *, register: Mapping[str, Any] | No
         return
     if not register:
         available = ", ".join(sorted(COLLATE_FN_REGISTRY))
-        raise KeyError(f"Unknown dataset '{name}'. Provide register={{...}} or use one of: {available}")
+        raise KeyError(f"Unknown collate fn '{name}'. Provide register={{...}} or use one of: {available}")
     target_path = register.get("target")
     module_path, _, attr = str(target_path).rpartition(":")
     if not module_path:
         module_path, _, attr = str(target_path).rpartition(".")
     cls = getattr(import_module(module_path), attr)
     reg_name = str(register.get("name", name))
-    register_dataset(reg_name, cls)
+    register_collate_fn(reg_name, cls)
 
 
 def _build_augment_bundle(spec: Mapping[str, Any]):
@@ -103,7 +103,6 @@ def _build_augment_bundle(spec: Mapping[str, Any]):
         bbox_format=spec.get("bbox_format"),
         bbox_label_fields=tuple(spec.get("bbox_label_fields", ())),
     )
-    print(kwargs)
     if bundle_name == "standard":
         bundle = StandardAugmentations(**kwargs)
     elif bundle_name == "light":
@@ -165,7 +164,6 @@ def build_datamodule(
 
     collate_fn = COLLATE_FN_REGISTRY.get(collate_fn_name) if collate_fn_name else None
 
-    print(data_cfg)
     return BaseDataModule(
         config=data_cfg,
         dataset=full_dataset,
