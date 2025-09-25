@@ -1,0 +1,12 @@
+name: detect
+device: cuda
+gpus: [0]
+vis_result: false
+vis_hm: false
+vis_traj: false
+model_path: null
+split: test
+fp1_filename: null
+eval:
+  score_threshold: 0.5
+  dist_threshold: 4
