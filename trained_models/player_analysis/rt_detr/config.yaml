@@ -1,0 +1,18 @@
+# rtdetr_config.yaml
+# Path to your Lightning checkpoint (.ckpt)
+checkpoint_path: "trained_models/player_analysis/rt_detr/rt_detr.ckpt"
+
+# Base model to instantiate from Transformers
+pretrained_model_name_or_path: "PekingU/rtdetr_v2_r18vd"
+
+# Keep this consistent with training
+num_labels: 1
+
+# Runtime
+device: "cuda" # "cuda" | "cpu" | "mps"
+strict: false # true only if you expect a perfect key match
+remove_prefix: "model." # remove Lightning's wrapper prefix from keys
+allow_partial: true # load intersecting keys and ignore the rest
+
+# Optional (PyTorch 2.x)
+torch_compile: false

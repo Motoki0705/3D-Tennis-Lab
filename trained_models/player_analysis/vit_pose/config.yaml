@@ -1,0 +1,11 @@
+# pose_config.yaml
+# HF model to load (no local training ckpt)
+model_id: "usyd-community/vitpose-base-simple"
+
+# Runtime
+device: "auto" # "auto" | "cuda" | "cpu" | "mps"
+dtype: "auto" # "auto" | "float16" | "bfloat16" | "float32"
+use_device_map: false # true to use accelerate's device_map="auto" sharding
+
+# Optional cache dir for HF artifacts
+cache_dir: null

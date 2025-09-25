@@ -1,4 +1,0 @@
-model: yolox
-weights: /path/to/ball_weights.ckpt
-input_size: [640, 640]
-confidence_threshold: 0.25
