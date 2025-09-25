@@ -1,0 +1,13 @@
+# Data source configuration.
+root: /path/to/datasets
+cameras:
+  - cam_01
+  - cam_02
+  - cam_03
+  - cam_04
+frames:
+  fps: 120
+  format: mp4
+annotations:
+  detections_dir: ${workspace.outputs}/detections_2d
+  tracks_dir: ${workspace.outputs}/tracks_2d
