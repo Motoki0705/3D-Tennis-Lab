@@ -3,12 +3,13 @@ from __future__ import annotations
 import logging
 from collections import deque
 from pathlib import Path
-from typing import List
+from typing import Any, List, Mapping
 
 import cv2
 import numpy as np
 import torch
 import torchvision.transforms as T
+from tqdm import tqdm
 
 # Add WASB-SBDT to path
 import sys
@@ -20,8 +21,6 @@ sys.path.append(str(WASB_SRC))
 from detectors import build_detector  # type: ignore  # noqa: E402
 from trackers import build_tracker  # type: ignore  # noqa: E402
 from utils.image import get_affine_transform  # type: ignore  # noqa: E402
-
-from omegaconf import DictConfig
 
 from .parquet_io import append_records
 from .state import StateRepository
@@ -38,9 +37,10 @@ def make_transform(img_shape: tuple[int, int], input_wh: tuple[int, int], inv: i
 
 
 class InferenceEngine:
-    def __init__(self, detect_cfg: DictConfig):
+    def __init__(self, detect_cfg: Mapping[str, Any]):
         self.cfg = detect_cfg
-        requested_device = detect_cfg.runner.device
+        runner_cfg = detect_cfg["runner"]
+        requested_device = runner_cfg.get("device", "cuda")
         if requested_device == "cuda" and not torch.cuda.is_available():
             LOG.warning("CUDA requested but not available. Falling back to CPU.")
             requested_device = "cpu"
@@ -49,10 +49,17 @@ class InferenceEngine:
         self.detector = build_detector(detect_cfg)
         self.tracker = build_tracker(detect_cfg)
 
-        self.frames_in = int(detect_cfg.model.frames_in)
-        self.input_size = (int(detect_cfg.model.inp_width), int(detect_cfg.model.inp_height))
-        self.output_size = (int(detect_cfg.model.out_width), int(detect_cfg.model.out_height))
-        self.output_scale = detect_cfg.model.out_scales[0]
+        model_cfg = detect_cfg["model"]
+        self.frames_in = int(model_cfg["frames_in"])
+        self.input_size = (
+            int(model_cfg["inp_width"]),
+            int(model_cfg["inp_height"]),
+        )
+        self.output_size = (
+            int(model_cfg["out_width"]),
+            int(model_cfg["out_height"]),
+        )
+        self.output_scale = int(model_cfg["out_scales"][0])
 
         self.transforms = T.Compose([
             T.ToTensor(),
@@ -93,52 +100,58 @@ class InferenceEngine:
 
         frame_idx = start_frame
         processed_frames = 0
+        progress_total = max(0, total_frames - start_frame)
+        progress = tqdm(total=progress_total or None, desc=f"Inference[{video_id}]", unit="frame")
 
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
+        try:
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
 
-            timestamp = frame_idx / fps
-            warped = cv2.warpAffine(frame, trans_input, self.input_size, flags=cv2.INTER_LINEAR)
-            img_tensor = self.transforms(warped).to(self.device)
-            frame_buffer.append(img_tensor)
+                timestamp = frame_idx / fps
+                warped = cv2.warpAffine(frame, trans_input, self.input_size, flags=cv2.INTER_LINEAR)
+                img_tensor = self.transforms(warped).to(self.device)
+                frame_buffer.append(img_tensor)
 
-            record = {
-                "frame_idx": frame_idx,
-                "t": timestamp,
-                "has_ball": False,
-                "xc": 0.0,
-                "yc": 0.0,
-                "conf": 0.0,
-            }
+                record = {
+                    "frame_idx": frame_idx,
+                    "t": timestamp,
+                    "has_ball": False,
+                    "xc": 0.0,
+                    "yc": 0.0,
+                    "conf": 0.0,
+                }
 
-            if len(frame_buffer) == self.frames_in:
-                input_tensor = torch.cat(list(frame_buffer), dim=0).unsqueeze(0)
-                batch_results, _ = self.detector.run_tensor(
-                    input_tensor,
-                    {self.output_scale: trans_output_tensor},
-                )
-                preds = batch_results[0][self.frames_in - 1]
-                tracked = self.tracker.update(preds)
-                if tracked and tracked.get("visi"):
-                    record.update({
-                        "has_ball": True,
-                        "xc": float(tracked.get("x", 0.0)),
-                        "yc": float(tracked.get("y", 0.0)),
-                        "conf": float(tracked.get("score", 1.0)),
-                    })
+                if len(frame_buffer) == self.frames_in:
+                    input_tensor = torch.cat(list(frame_buffer), dim=0).unsqueeze(0)
+                    with torch.no_grad():
+                        batch_results, _ = self.detector.run_tensor(
+                            input_tensor,
+                            {self.output_scale: trans_output_tensor},
+                        )
+                    preds = batch_results[0][self.frames_in - 1]
+                    tracked = self.tracker.update(preds)
+                    if tracked and tracked.get("visi"):
+                        record.update({
+                            "has_ball": True,
+                            "xc": float(tracked.get("x", 0.0)),
+                            "yc": float(tracked.get("y", 0.0)),
+                            "conf": float(tracked.get("score", 1.0)),
+                        })
 
-            records.append(record)
-            processed_frames += 1
-            if processed_frames % save_every_n_frames == 0:
-                append_records(parquet_path, records)
-                repo.update_progress(video_id, last_processed_frame=frame_idx, status="running")
-                records = []
+                records.append(record)
+                processed_frames += 1
+                if processed_frames % save_every_n_frames == 0:
+                    append_records(parquet_path, records)
+                    repo.update_progress(video_id, last_processed_frame=frame_idx, status="running")
+                    records = []
 
-            frame_idx += 1
-
-        cap.release()
+                frame_idx += 1
+                progress.update(1)
+        finally:
+            cap.release()
+            progress.close()
 
         if records:
             append_records(parquet_path, records)

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import argparse
 import logging
-import sys
+import hydra
+from omegaconf import DictConfig
 
-from .config import load_config
-from .pipeline import AnnotationPipeline
+from .pipeline import AnnotationPipeline  # <-- keep this
 
 
 def setup_logging(level: str) -> None:
@@ -15,42 +14,23 @@ def setup_logging(level: str) -> None:
     )
 
 
-def main(argv: list[str] | None = None) -> int:
-    argv = list(argv or sys.argv[1:])
-
-    parser = argparse.ArgumentParser(prog="python -m pipeline")
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    sub.add_parser("run", help="scan videos, run inference, and export clips")
-
-    accept_parser = sub.add_parser("accept", help="mark a clip as accepted")
-    accept_parser.add_argument("clip", help="clip reference, e.g. game1/Clip1")
-
-    reject_parser = sub.add_parser("reject", help="mark a clip as rejected")
-    reject_parser.add_argument("clip", help="clip reference")
-
-    sub.add_parser("finalize", help="merge accepted clips into final annotations")
-
-    args, hydra_overrides = parser.parse_known_args(argv)
-    cfg = load_config(hydra_overrides)
-
+@hydra.main(version_base=None, config_path="conf", config_name="config")
+def main(cfg: DictConfig) -> int:
     setup_logging(cfg.logging.level)
-
     pipeline = AnnotationPipeline(cfg)
 
-    if args.command == "run":
+    if cfg.command == "run":
         pipeline.run()
-    elif args.command == "accept":
-        pipeline.accept(args.clip)
-    elif args.command == "reject":
-        pipeline.reject(args.clip)
-    elif args.command == "finalize":
+    elif cfg.command == "accept":
+        pipeline.accept(cfg.clip)
+    elif cfg.command == "reject":
+        pipeline.reject(cfg.clip)
+    elif cfg.command == "finalize":
         pipeline.finalize()
-    else:  # pragma: no cover - safeguard
-        parser.error(f"Unsupported command {args.command}")
-
+    else:
+        raise ValueError(f"Unsupported command: {cfg.command}")
     return 0
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":
     raise SystemExit(main())

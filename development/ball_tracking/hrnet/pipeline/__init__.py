@@ -1,7 +1,5 @@
-"""Annotation pipeline package for tennis ball detection clips."""
+"""HRNet-based tennis ball annotation pipeline."""
 
-__all__ = [
-    "load_config",
-]
+from .pipeline import AnnotationPipeline
 
-from .config import load_config  # noqa: E402
+__all__ = ["AnnotationPipeline"]

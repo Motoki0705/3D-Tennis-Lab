@@ -40,19 +40,23 @@ Hydra loads `conf/config.yaml`. Override any value via CLI suffixes (e.g. `pytho
   - `model`/`method`: Informational tags recorded alongside hydra overrides.
   - `batch_size`: Passed to the detector runner.
   - `save_every_n_frames`: Flush frequency for parquet writes.
-  - `detect_overrides`: List of Hydra override strings forwarded to `development/ball_tracking/hrnet/configs/detect.yaml` (e.g. `['runner.device=cpu', 'model.frames_in=5']`).
+  - `model_path`: Checkpoint path propagated to the detector config.
 - `clip_extractor`: Selects the extraction strategy and its parameters (see step 3). Switching to clustering requires scikit-learn at runtime.
 - `export`: Controls whether raw frames are written and the JPEG quality used for exported clips.
 - `merge`: Currently only `only_accept`, guarding against accidental inclusion of un-reviewed clips.
 - `logging`: Global logging level applied by `cli.py`.
 
-### Detect configuration
+### Detector stack configuration
 
-`detect_config.load_detect_config` composes Hydra configs from `development/ball_tracking/hrnet/configs`. Important defaults:
+Hydra composes the detector runtime directly from the config groups declared in `defaults`:
 
-- `model.frames_in=3`, `model.inp_height=288`, `model.inp_width=512`, `model.out_height=288`, `model.out_width=512`, and `model.out_scales=[0]` (see `configs/model/wasb.yaml`).
-- `runner.device=cuda` with automatic fallback to CPU when CUDA is unavailable.
-- Tracker settings live under `configs/tracker` and can be tuned via `inference.detect_overrides`.
+- `runner`: Execution device, visualization toggles, and evaluation thresholds.
+- `model`: WASB/HRNet architecture parameters (frames in/out, input/output resolution, scales).
+- `detector`: TrackNetV2-specific knobs, including interpolation to `inference.model_path` for checkpoints.
+- `transform`: Augmentation toggles for train/test pipelines (kept deterministic for inference).
+- `tracker`: Online tracker thresholds and displacement settings.
+
+Customize any of these via CLI overrides (e.g. `python -m ... run runner.device=cpu detector.postprocessor.score_threshold=0.3`).
 
 ## Data shape flow
 

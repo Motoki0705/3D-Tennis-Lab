@@ -4,6 +4,8 @@ import logging
 from pathlib import Path
 from typing import List
 
+from omegaconf import DictConfig, OmegaConf
+
 from .annotation import (
     ExportPaths,
     VideoFrameExtractor,
@@ -15,7 +17,6 @@ from .annotation import (
     save_clip_json,
 )
 from .clip_extractor import Clip, build_clip_extractor
-from .detect_config import load_detect_config
 from .inference import InferenceEngine
 from .parquet_io import load_parquet
 from .scanner import scan_new_videos
@@ -25,20 +26,20 @@ LOG = logging.getLogger(__name__)
 
 
 class AnnotationPipeline:
-    def __init__(self, cfg):
+    def __init__(self, cfg: DictConfig):
         self.cfg = cfg
-        paths = cfg.paths
-        self.videos_root = Path(paths.videos_root)
+        paths_cfg = cfg["paths"]
+        self.videos_root = Path(paths_cfg["videos_root"])
         self.export_paths = ExportPaths(
-            images_root=Path(paths.images_dir),
-            ann_clips_root=Path(paths.ann_clips_dir),
+            images_root=Path(paths_cfg["images_dir"]),
+            ann_clips_root=Path(paths_cfg["ann_clips_dir"]),
         )
-        self.final_annotations = Path(paths.ann_final)
-        self.repo = StateRepository(Path(paths.state_db))
+        self.final_annotations = Path(paths_cfg["ann_final"])
+        self.repo = StateRepository(Path(paths_cfg["state_db"]))
 
-        detect_cfg = load_detect_config(cfg.inference.detect_overrides)
-        self.inference_engine = InferenceEngine(detect_cfg)
-        self.clip_extractor = build_clip_extractor(cfg.clip_extractor)
+        detection_cfg = self._compose_detection_cfg(cfg)
+        self.inference_engine = InferenceEngine(detection_cfg)
+        self.clip_extractor = build_clip_extractor(cfg["clip_extractor"])
 
     # ------------------------------------------------------------------
     def run(self) -> None:
@@ -58,7 +59,7 @@ class AnnotationPipeline:
 
             LOG.info("Processing video %s (status=%s)", video_path, record.status)
             start_frame = max(0, record.last_processed_frame + 1)
-            parquet_path = Path(self.cfg.paths.inference_dir) / f"{record.video_id}.parquet"
+            parquet_path = Path(self.cfg["paths"]["inference_dir"]) / f"{record.video_id}.parquet"
 
             # Run inference if needed
             if record.status != "done" or start_frame == 0:
@@ -69,7 +70,7 @@ class AnnotationPipeline:
                         self.repo,
                         record.video_id,
                         start_frame=start_frame,
-                        save_every_n_frames=int(self.cfg.inference.save_every_n_frames),
+                        save_every_n_frames=int(self.cfg["inference"]["save_every_n_frames"]),
                     )
                 except Exception:
                     LOG.exception("Inference failed for %s", video_path)
@@ -137,8 +138,8 @@ class AnnotationPipeline:
                     video_id=video_id,
                     reader=reader,
                     export_paths=self.export_paths,
-                    jpg_quality=int(self.cfg.export.jpg_quality),
-                    write_frames=bool(self.cfg.export.write_frames),
+                    jpg_quality=int(self.cfg["export"]["jpg_quality"]),
+                    write_frames=bool(self.cfg["export"]["write_frames"]),
                 )
                 existing_meta.add((video_id, clip.start_frame, clip.end_frame))
                 next_index += 1
@@ -174,3 +175,13 @@ class AnnotationPipeline:
     def _clip_is_new(self, video_id: str, clip: Clip, existing: set[tuple[str, int, int]]) -> bool:
         key = (video_id, clip.start_frame, clip.end_frame)
         return key not in existing
+
+    @staticmethod
+    def _compose_detection_cfg(cfg: DictConfig) -> DictConfig:
+        groups = ("runner", "model", "detector", "transform", "tracker", "dataloader")
+        detection_cfg = OmegaConf.create()
+        for name in groups:
+            if name not in cfg:
+                raise KeyError(f"Missing detection config group: {name}")
+            detection_cfg[name] = OmegaConf.create(OmegaConf.to_container(cfg[name], resolve=True))
+        return detection_cfg
