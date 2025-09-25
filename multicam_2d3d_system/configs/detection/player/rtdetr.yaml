@@ -1,0 +1,11 @@
+# RT-DETR player detector configuration.
+
+weights: ${workspace.root}/models/player/rt_detr/checkpoints/latest.ckpt
+pretrained_model_name_or_path: PekingU/rtdetr_v2_r18vd
+num_labels: 1
+device: cuda
+strict: false
+remove_prefix: "model."
+allow_partial: true
+torch_compile: false
+score_threshold: 0.5

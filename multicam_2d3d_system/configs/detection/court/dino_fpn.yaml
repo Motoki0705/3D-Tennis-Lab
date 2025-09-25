@@ -1,0 +1,15 @@
+# DINO-FPN court keypoint detector configuration.
+
+weights: ${workspace.root}/models/court/dino_fpn/checkpoints/latest.ckpt
+device: cuda
+heatmap_channels: 15
+decoder_channels: [256, 128, 64, 32]
+backbone_name: dinov3_vits16
+weights_path: third_party/dinov3/checkpoints/dinov3_vits16_pretrain_lvd1689m-08c60483.pth
+pad_to_multiple: 16
+resize_long_side: 1024
+strict: false
+remove_prefix: "model."
+allow_partial: true
+score_threshold: 0.3
+max_keypoints: null

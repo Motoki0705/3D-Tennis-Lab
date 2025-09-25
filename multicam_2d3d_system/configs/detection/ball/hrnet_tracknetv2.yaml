@@ -1,0 +1,10 @@
+# HRNet + TrackNetV2 ball detector configuration.
+#
+# Update `weights` to point at the TrackNetV2 checkpoint you exported during training.
+
+weights: ${workspace.root}/models/ball_tracking/hrnet/best_model.pth.tar
+device: cuda
+gpu_ids: [0]
+config_dir: ${hydra:runtime.cwd}/trained_models/ball_tracking/hrnet/configs
+config_name: detect
+overrides: []

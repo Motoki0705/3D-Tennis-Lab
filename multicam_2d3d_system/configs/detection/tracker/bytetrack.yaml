@@ -1,0 +1,4 @@
+# Placeholder for future 2D tracker integration.
+
+weights: null
+device: cuda
