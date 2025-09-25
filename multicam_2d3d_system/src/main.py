@@ -22,7 +22,7 @@ PIPELINE_TARGETS: dict[str, str] = {
     "detect2d": "multicam_2d3d_system.src.pipelines.detect2d:run",
     "track2d": "multicam_2d3d_system.src.pipelines.track2d:run",
     "triangulate3d": "multicam_2d3d_system.src.pipelines.twoD_to_threeD:run",
-    "full": "multicam_2d3d_system.src.pipelines.twoD_to_threeD:run",
+    "full": "multicam_2d3d_system.src.pipelines.full:run",
 }
 
 _DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs" / "config.yaml"

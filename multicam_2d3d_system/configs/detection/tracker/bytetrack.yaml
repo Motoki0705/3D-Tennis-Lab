@@ -1,4 +1,7 @@
-# Placeholder for future 2D tracker integration.
+# Simple centroid tracker configuration (placeholder for ByteTrack).
 
-weights: null
-device: cuda
+method: simple_centroid
+max_frame_gap: 5
+ball_distance_px: 50
+player_distance_px: 120
+min_track_length: 3

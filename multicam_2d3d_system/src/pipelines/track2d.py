@@ -27,6 +27,10 @@ def run(cfg: DictConfig) -> None:
         tracks = tracking.track_detections(
             detections,
             method=tracker_cfg.method,
+            max_frame_gap=getattr(tracker_cfg, "max_frame_gap", 5),
+            ball_distance_px=getattr(tracker_cfg, "ball_distance_px", 50.0),
+            player_distance_px=getattr(tracker_cfg, "player_distance_px", 120.0),
+            min_track_length=getattr(tracker_cfg, "min_track_length", 3),
         )
     except NotImplementedError:
         _LOGGER.info("Tracker '%s' not implemented; skipping", tracker_cfg.method)

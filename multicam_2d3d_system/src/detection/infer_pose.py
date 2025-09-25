@@ -199,5 +199,8 @@ def _build_loader_config(
                 else:
                     kwargs[field] = value
 
+    if weights_path and weights_path.is_dir() and "cache_dir" not in kwargs:
+        kwargs["cache_dir"] = str(weights_path)
+
     pose_cfg = PoseLoadConfig(**kwargs)
     return pose_cfg, float(keypoint_threshold)

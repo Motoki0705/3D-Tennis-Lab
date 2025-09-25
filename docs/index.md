@@ -5,4 +5,4 @@
 [![Commit activity](https://img.shields.io/github/commit-activity/m/motoki/3d-tennis-lab)](https://img.shields.io/github/commit-activity/m/motoki/3d-tennis-lab)
 [![License](https://img.shields.io/github/license/motoki/3d-tennis-lab)](https://img.shields.io/github/license/motoki/3d-tennis-lab)
 
-This is a template repository for Python projects that use Poetry for their dependency management.
+This repository contains a modular toolkit for tennis analytics. Start with the [Multicam 2D→3D System](multicam_2d3d_system.md) guide for the end-to-end reconstruction pipeline.
