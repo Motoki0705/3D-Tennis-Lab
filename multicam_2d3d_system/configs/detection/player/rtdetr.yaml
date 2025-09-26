@@ -1,6 +1,6 @@
 # RT-DETR player detector configuration.
 
-weights: ${workspace.root}/models/player/rt_detr/checkpoints/latest.ckpt
+weights: ${workspace.root}/trained_models/player_analysis/rt_detr/rt_detr.ckpt
 pretrained_model_name_or_path: PekingU/rtdetr_v2_r18vd
 num_labels: 1
 device: cuda

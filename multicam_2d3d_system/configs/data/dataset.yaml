@@ -1,10 +1,8 @@
 # Data source configuration.
-root: /path/to/datasets
+root: data/samples/
 cameras:
-  - cam_01
-  - cam_02
-  - cam_03
-  - cam_04
+  - clip
+
 frames:
   fps: 120
   format: mp4
