@@ -35,7 +35,82 @@ def run_player_inference(
     loader_cfg, score_threshold = _build_loader_config(weights_path, detector_cfg)
     model, processor, device = load_hf_rtdetr_with_ckpt(loader_cfg)
 
+    batch_size = 1
+    use_half = False
+    if detector_cfg is not None:
+        cfg_obj = detector_cfg if isinstance(detector_cfg, DictConfig) else OmegaConf.create(detector_cfg)
+        batch_size = int(getattr(cfg_obj, "batch_size", 1) or 1)
+        use_half = bool(getattr(cfg_obj, "use_half", False))
+
+    if batch_size <= 0:
+        batch_size = 1
+
+    torch_device = torch.device(device)
+    if use_half and torch_device.type != "cuda":
+        _LOGGER.warning(
+            "Half precision requested for player detector but device is %s; falling back to full precision",
+            torch_device,
+        )
+        use_half = False
+
+    if use_half:
+        try:
+            model = model.half()  # type: ignore[assignment]
+        except AttributeError:  # pragma: no cover - defensive fallback
+            _LOGGER.warning("Player detector model does not support half precision; continuing in float32")
+            use_half = False
+
     results: list[formats.FrameDetections2D] = []
+
+    def _flush_batch(
+        batch_images: list[Image.Image],
+        batch_meta: list[dict[str, Any]],
+    ) -> None:
+        if not batch_images:
+            return
+
+        processor_inputs = processor(images=batch_images, return_tensors="pt")
+        prepared_inputs: dict[str, Any] = {}
+        for key, value in processor_inputs.items():
+            if isinstance(value, torch.Tensor):
+                dtype = torch.float16 if use_half and value.dtype == torch.float32 else value.dtype
+                prepared_inputs[key] = value.to(device=torch_device, dtype=dtype)
+            else:
+                prepared_inputs[key] = value
+
+        outputs = model(**prepared_inputs)
+        target_sizes = torch.tensor(
+            [[meta["height"], meta["width"]] for meta in batch_meta],
+            device=torch_device,
+            dtype=torch.float32,
+        )
+        processed_batch = processor.post_process_object_detection(
+            outputs,
+            threshold=score_threshold,
+            target_sizes=target_sizes,
+        )
+
+        for meta, processed in zip(batch_meta, processed_batch, strict=False):
+            detections: list[formats.Detection2DEntry] = []
+            boxes = processed.get("boxes")
+            scores = processed.get("scores")
+            labels = processed.get("labels")
+
+            if boxes is not None and scores is not None and labels is not None:
+                for box, score, label in zip(boxes.cpu(), scores.cpu(), labels.cpu(), strict=False):
+                    if int(label.item()) != 0:
+                        continue
+                    detections.append({
+                        "cls": "player",
+                        "bbox": tuple(float(v) for v in box.tolist()),
+                        "score": float(score.item()),
+                    })
+
+            meta_record: formats.FrameDetections2D = meta["record"]
+            meta_record["detections"] = detections
+
+        batch_images.clear()
+        batch_meta.clear()
 
     for video_path in video_paths:
         _LOGGER.info("Running player detector on %s", video_path)
@@ -55,6 +130,8 @@ def run_player_inference(
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         frame_idx = 0
+        batch_images: list[Image.Image] = []
+        batch_meta: list[dict[str, Any]] = []
 
         with torch.inference_mode():
             while True:
@@ -62,44 +139,31 @@ def run_player_inference(
                 if not ret:
                     break
 
-                frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-                pil_image = Image.fromarray(frame_rgb)
-
-                batch = processor(images=pil_image, return_tensors="pt")
-                batch = {key: value.to(device) if hasattr(value, "to") else value for key, value in batch.items()}
-
-                outputs = model(**batch)
-                target_size = torch.tensor([[height, width]], device=device)
-                processed = processor.post_process_object_detection(
-                    outputs,
-                    threshold=score_threshold,
-                    target_sizes=target_size,
-                )[0]
-
-                detections: list[formats.Detection2DEntry] = []
-                boxes = processed.get("boxes")
-                scores = processed.get("scores")
-                labels = processed.get("labels")
-
-                if boxes is not None and scores is not None and labels is not None:
-                    for box, score, label in zip(boxes.cpu(), scores.cpu(), labels.cpu(), strict=False):
-                        if int(label.item()) != 0:
-                            continue
-                        detections.append({
-                            "cls": "player",
-                            "bbox": tuple(float(v) for v in box.tolist()),
-                            "score": float(score.item()),
-                        })
-
-                results.append({
+                record: formats.FrameDetections2D = {
                     "camera_id": video_path.stem,
                     "frame_idx": frame_idx,
                     "timestamp": frame_idx / fps if fps > 0 else float(frame_idx),
-                    "detections": detections,
+                    "detections": [],
                     "image_size": (width, height),
+                }
+                results.append(record)
+
+                frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+                pil_image = Image.fromarray(frame_rgb)
+
+                batch_images.append(pil_image)
+                batch_meta.append({
+                    "record": record,
+                    "width": width,
+                    "height": height,
                 })
 
+                if len(batch_images) >= batch_size:
+                    _flush_batch(batch_images, batch_meta)
+
                 frame_idx += 1
+
+            _flush_batch(batch_images, batch_meta)
 
         cap.release()
 
@@ -125,6 +189,8 @@ def _build_loader_config(
 
         score_threshold = float(config_values.pop("score_threshold", score_threshold))
         config_values.pop("weights", None)
+        config_values.pop("batch_size", None)
+        config_values.pop("use_half", None)
 
         allowed_fields = {
             "pretrained_model_name_or_path",

@@ -8,3 +8,5 @@ gpu_ids: [0]
 config_dir: ${hydra:runtime.cwd}/trained_models/ball_tracking/hrnet/configs
 config_name: detect
 overrides: []
+batch_size: 32
+use_half: true

@@ -9,3 +9,5 @@ remove_prefix: "model."
 allow_partial: true
 torch_compile: false
 score_threshold: 0.5
+batch_size: 16
+use_half: true

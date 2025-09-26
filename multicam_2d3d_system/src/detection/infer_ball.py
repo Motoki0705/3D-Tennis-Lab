@@ -65,6 +65,78 @@ def run_ball_inference(
     torch_device = torch.device(device)
     results: list[formats.FrameDetections2D] = []
 
+    batch_size = 1
+    use_half = False
+    if detector_cfg is not None:
+        cfg_obj = detector_cfg if isinstance(detector_cfg, DictConfig) else OmegaConf.create(detector_cfg)
+        batch_size = int(getattr(cfg_obj, "batch_size", 1) or 1)
+        use_half = bool(getattr(cfg_obj, "use_half", False))
+
+    if batch_size <= 0:
+        batch_size = 1
+
+    if use_half and torch_device.type != "cuda":
+        _LOGGER.warning(
+            "Half precision requested for ball detector but device is %s; using float32",
+            torch_device,
+        )
+        use_half = False
+
+    if use_half:
+        applied = False
+        if hasattr(detector, "half"):
+            try:
+                detector.half()
+                applied = True
+            except Exception:  # pragma: no cover - defensive
+                applied = False
+        if not applied and hasattr(detector, "model") and hasattr(detector.model, "half"):
+            try:
+                detector.model.half()
+                applied = True
+            except Exception:  # pragma: no cover - defensive
+                applied = False
+        if not applied:
+            _LOGGER.warning("Ball detector does not expose a half() method; continuing in float32")
+            use_half = False
+
+    def _flush_batch(samples: list[dict[str, Any]]) -> None:
+        if not samples:
+            return
+
+        clip_batch = torch.cat([sample["tensor"] for sample in samples], dim=0)
+        if use_half and clip_batch.dtype == torch.float32:
+            clip_batch = clip_batch.half()
+        clip_batch = clip_batch.to(torch_device)
+
+        batched_trans = {}
+        for scale in out_scales:
+            matrices = [sample["trans_outputs"][scale] for sample in samples]
+            cat_mat = torch.cat(matrices, dim=0)
+            if use_half and cat_mat.dtype == torch.float32:
+                cat_mat = cat_mat.half()
+            batched_trans[scale] = cat_mat.to(torch_device)
+
+        batch_results, _ = detector.run_tensor(clip_batch, batched_trans)
+
+        for index, sample in enumerate(samples):
+            detections_sequence = batch_results[index]
+            preds = detections_sequence[frames_in - 1]
+            tracked = tracker.update(preds)
+
+            detection_list: list[formats.Detection2DEntry] = []
+            if tracked.get("visi"):
+                detection_list.append({
+                    "cls": "ball",
+                    "point": (float(tracked["x"]), float(tracked["y"])),
+                    "score": float(tracked.get("score", 0.0)),
+                })
+
+            record: formats.FrameDetections2D = sample["record"]
+            record["detections"] = detection_list
+
+        samples.clear()
+
     for video_path in video_paths:
         _LOGGER.info("Running ball detector on %s", video_path)
         if not video_path.exists():
@@ -88,6 +160,7 @@ def run_ball_inference(
         frame_idx = 0
         trans_input = _compute_input_transform((height, width), input_wh)
         trans_outputs_template = _compute_output_transforms((height, width), output_wh, out_scales, torch_device)
+        pending_samples: list[dict[str, Any]] = []
 
         with torch.inference_mode():
             while True:
@@ -100,32 +173,30 @@ def run_ball_inference(
                 tensor = transform(pil_img)
                 frame_buffer.append(tensor)
 
-                detections: list[formats.Detection2DEntry] = []
-
-                if len(frame_buffer) >= frames_in:
-                    clip_tensor = torch.cat(list(frame_buffer), dim=0).unsqueeze(0).to(torch_device)
-                    trans_outputs = {scale: mat.clone() for scale, mat in trans_outputs_template.items()}
-
-                    batch_results, _ = detector.run_tensor(clip_tensor, trans_outputs)
-                    preds = batch_results[0][frames_in - 1]
-                    tracked = tracker.update(preds)
-
-                    if tracked.get("visi"):
-                        detections.append({
-                            "cls": "ball",
-                            "point": (float(tracked["x"]), float(tracked["y"])),
-                            "score": float(tracked.get("score", 0.0)),
-                        })
-
-                results.append({
+                record: formats.FrameDetections2D = {
                     "camera_id": video_path.stem,
                     "frame_idx": frame_idx,
                     "timestamp": frame_idx / fps if fps > 0 else float(frame_idx),
-                    "detections": detections,
+                    "detections": [],
                     "image_size": (width, height),
-                })
+                }
+                results.append(record)
+
+                if len(frame_buffer) >= frames_in:
+                    clip_tensor = torch.cat(list(frame_buffer), dim=0).unsqueeze(0)
+                    trans_outputs = {scale: mat.clone() for scale, mat in trans_outputs_template.items()}
+                    pending_samples.append({
+                        "tensor": clip_tensor,
+                        "trans_outputs": trans_outputs,
+                        "record": record,
+                    })
+
+                    if len(pending_samples) >= batch_size:
+                        _flush_batch(pending_samples)
 
                 frame_idx += 1
+
+            _flush_batch(pending_samples)
 
         cap.release()
 
@@ -162,6 +233,9 @@ def _build_loader_config(
                 kwargs["overrides"] = tuple(str(item) for item in overrides)
             else:
                 kwargs["overrides"] = (str(overrides),)
+
+        config_values.pop("batch_size", None)
+        config_values.pop("use_half", None)
 
         device = config_values.get("device")
         if device:

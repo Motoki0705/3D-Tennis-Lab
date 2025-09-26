@@ -39,8 +39,102 @@ def run_pose_inference(
     loader_cfg, keypoint_threshold = _build_loader_config(detector_cfg)
     pose_model, pose_processor, pose_device = load_pose_from_hub(loader_cfg)
 
+    batch_size = 1
+    use_half = False
+    if detector_cfg is not None:
+        cfg_obj = detector_cfg if isinstance(detector_cfg, DictConfig) else OmegaConf.create(detector_cfg)
+        batch_size = int(getattr(cfg_obj, "batch_size", 1) or 1)
+        use_half = bool(getattr(cfg_obj, "use_half", False))
+
+    if batch_size <= 0:
+        batch_size = 1
+
+    torch_device = torch.device(pose_device)
+    if use_half and torch_device.type != "cuda":
+        _LOGGER.warning(
+            "Half precision requested for pose estimator but device is %s; falling back to float32",
+            torch_device,
+        )
+        use_half = False
+
+    if use_half:
+        try:
+            pose_model = pose_model.half()  # type: ignore[assignment]
+        except AttributeError:  # pragma: no cover - defensive fallback
+            _LOGGER.warning("Pose model does not support half precision; continuing in float32")
+            use_half = False
+
     detection_index = _index_player_detections(player_detections)
     results: list[formats.FrameDetections2D] = []
+
+    def _flush_batch(batch_items: list[dict[str, Any]]) -> None:
+        if not batch_items:
+            return
+
+        images = [item["image"] for item in batch_items]
+        boxes_xywh = [item["boxes_xywh"] for item in batch_items]
+
+        pose_inputs = pose_processor(
+            images,
+            boxes=boxes_xywh,
+            return_tensors="pt",
+        )
+        prepared_inputs: dict[str, Any] = {}
+        for key, value in pose_inputs.items():
+            if isinstance(value, torch.Tensor):
+                dtype = torch.float16 if use_half and value.dtype == torch.float32 else value.dtype
+                prepared_inputs[key] = value.to(device=torch_device, dtype=dtype)
+            else:
+                prepared_inputs[key] = value
+
+        pose_outputs = pose_model(**prepared_inputs)
+        pose_results = pose_processor.post_process_pose_estimation(
+            pose_outputs,
+            boxes=boxes_xywh,
+        )
+
+        for item, pose_entry in zip(batch_items, pose_results, strict=False):
+            detections: list[formats.Detection2DEntry] = []
+            boxes_xyxy = item["boxes_xyxy"]
+            player_boxes_meta = item["player_boxes"]
+
+            for result, bbox_xyxy, player_meta in zip(
+                pose_entry,
+                boxes_xyxy,
+                player_boxes_meta,
+                strict=False,
+            ):
+                keypoints = result.get("keypoints", [])
+                kp_scores = result.get("scores", [])
+
+                filtered_keypoints = []
+                for kp_idx, point in enumerate(keypoints):
+                    x_coord, y_coord = float(point[0]), float(point[1])
+                    score_val = float(kp_scores[kp_idx]) if kp_idx < len(kp_scores) else 0.0
+                    if score_val < keypoint_threshold:
+                        continue
+                    filtered_keypoints.append({
+                        "x": x_coord,
+                        "y": y_coord,
+                        "score": score_val,
+                    })
+
+                if not filtered_keypoints:
+                    continue
+
+                base_score = float(player_meta.get("score", 0.0))
+                avg_pose_score = float(np.mean([kp["score"] for kp in filtered_keypoints]))
+
+                detections.append({
+                    "cls": "pose",
+                    "bbox": tuple(float(v) for v in bbox_xyxy),
+                    "score": float(max(base_score, avg_pose_score)),
+                    "keypoints": filtered_keypoints,
+                })
+
+            item["record"]["detections"] = detections
+
+        batch_items.clear()
 
     for video_path in video_paths:
         _LOGGER.info("Running pose estimator on %s", video_path)
@@ -61,6 +155,8 @@ def run_pose_inference(
 
         frame_idx = 0
 
+        batch_items: list[dict[str, Any]] = []
+
         with torch.inference_mode():
             while True:
                 ret, frame_bgr = cap.read()
@@ -70,7 +166,14 @@ def run_pose_inference(
                 frame_key = (video_path.stem, frame_idx)
                 player_boxes = detection_index.get(frame_key, [])
 
-                detections: list[formats.Detection2DEntry] = []
+                record: formats.FrameDetections2D = {
+                    "camera_id": frame_key[0],
+                    "frame_idx": frame_idx,
+                    "timestamp": frame_idx / fps if fps > 0 else float(frame_idx),
+                    "detections": [],
+                    "image_size": (width, height),
+                }
+                results.append(record)
 
                 if player_boxes:
                     frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
@@ -81,61 +184,20 @@ def run_pose_inference(
                     boxes_xywh[:, 2] -= boxes_xywh[:, 0]
                     boxes_xywh[:, 3] -= boxes_xywh[:, 1]
 
-                    pose_inputs = pose_processor(
-                        pil_image,
-                        boxes=[boxes_xywh],
-                        return_tensors="pt",
-                    )
-                    pose_inputs = {
-                        key: value.to(pose_device) if hasattr(value, "to") else value
-                        for key, value in pose_inputs.items()
-                    }
+                    batch_items.append({
+                        "image": pil_image,
+                        "boxes_xywh": boxes_xywh,
+                        "boxes_xyxy": boxes_xyxy.tolist(),
+                        "player_boxes": player_boxes,
+                        "record": record,
+                    })
 
-                    pose_outputs = pose_model(**pose_inputs)
-                    pose_results = pose_processor.post_process_pose_estimation(
-                        pose_outputs,
-                        boxes=[boxes_xywh],
-                    )[0]
-
-                    for idx, pose_entry in enumerate(pose_results):
-                        keypoints = pose_entry.get("keypoints", [])
-                        kp_scores = pose_entry.get("scores", [])
-
-                        filtered_keypoints = []
-                        for kp_idx, point in enumerate(keypoints):
-                            x_coord, y_coord = float(point[0]), float(point[1])
-                            score_val = float(kp_scores[kp_idx]) if kp_idx < len(kp_scores) else 0.0
-                            if score_val < keypoint_threshold:
-                                continue
-                            filtered_keypoints.append({
-                                "x": x_coord,
-                                "y": y_coord,
-                                "score": score_val,
-                            })
-
-                        if not filtered_keypoints:
-                            continue
-
-                        bbox_xyxy = boxes_xyxy[idx].tolist()
-                        base_score = float(player_boxes[idx].get("score", 0.0))
-                        avg_pose_score = float(np.mean([kp["score"] for kp in filtered_keypoints]))
-
-                        detections.append({
-                            "cls": "pose",
-                            "bbox": tuple(float(v) for v in bbox_xyxy),
-                            "score": float(max(base_score, avg_pose_score)),
-                            "keypoints": filtered_keypoints,
-                        })
-
-                results.append({
-                    "camera_id": frame_key[0],
-                    "frame_idx": frame_idx,
-                    "timestamp": frame_idx / fps if fps > 0 else float(frame_idx),
-                    "detections": detections,
-                    "image_size": (width, height),
-                })
+                    if len(batch_items) >= batch_size:
+                        _flush_batch(batch_items)
 
                 frame_idx += 1
+
+            _flush_batch(batch_items)
 
         cap.release()
 
@@ -180,6 +242,9 @@ def _build_loader_config(
         config_values = cast(dict[str, Any], config_values_obj)
 
         keypoint_threshold = float(config_values.pop("keypoint_threshold", keypoint_threshold))
+
+        config_values.pop("batch_size", None)
+        config_values.pop("use_half", None)
 
         allowed_fields = {
             "model_id",

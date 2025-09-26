@@ -6,3 +6,5 @@ dtype: float32
 use_device_map: false
 cache_dir: null
 keypoint_threshold: 0.3
+batch_size: 16
+use_half: false

@@ -7,9 +7,11 @@ decoder_channels: [256, 128, 64, 32]
 backbone_name: dinov3_vitl16
 weights_path: third_party/dinov3/checkpoints/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth
 pad_to_multiple: 16
-resize_long_side: 1024
+resize_long_side: 640
 strict: false
 remove_prefix: "model."
 allow_partial: true
 score_threshold: 0.3
 max_keypoints: null
+batch_size: 1
+use_half: false
