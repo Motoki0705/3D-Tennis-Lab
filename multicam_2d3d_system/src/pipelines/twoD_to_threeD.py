@@ -10,6 +10,7 @@ from omegaconf import DictConfig
 
 from ..dataio import formats, readers, writers
 from ..geometry import court_frame, temporal_opt, triangulation
+from ..viz import render3d
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -112,4 +113,14 @@ def run(cfg: DictConfig) -> None:
     else:
         _LOGGER.info("Skipping court frame alignment; no calibration entries available")
 
-    writers.write_reconstruction(reconstruction, _build_output_path(cfg))
+    output_path = _build_output_path(cfg)
+    writers.write_reconstruction(reconstruction, output_path)
+
+    viz_cfg = getattr(cfg.export, "visualization", None)
+    render_cfg = getattr(viz_cfg, "render3d", None)
+    if render_cfg and getattr(render_cfg, "enabled", False):
+        scene_path = Path(
+            getattr(render_cfg, "output_path", Path(cfg.workspace.outputs) / "viz" / "reconstruction.ply")
+        )
+        backend = getattr(render_cfg, "backend", "open3d")
+        render3d.render_scene(reconstruction, scene_path, backend=backend)
