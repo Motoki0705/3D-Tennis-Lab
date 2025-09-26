@@ -1,6 +1,5 @@
 # ViT-Pose configuration for player keypoint estimation.
 
-weights: ${workspace.root}/models/player/pose/cache
 model_id: usyd-community/vitpose-base-simple
 device: cuda
 dtype: auto

@@ -28,7 +28,6 @@ _LOGGER = logging.getLogger(__name__)
 
 def run_pose_inference(
     video_paths: Iterable[Path],
-    weights_path: Path,
     detector_cfg: DictConfig | dict | None = None,
     player_detections: list[formats.FrameDetections2D] | None = None,
 ) -> list[formats.FrameDetections2D]:
@@ -37,7 +36,7 @@ def run_pose_inference(
     if player_detections is None:
         raise ValueError("Player detections are required for pose inference.")
 
-    loader_cfg, keypoint_threshold = _build_loader_config(weights_path, detector_cfg)
+    loader_cfg, keypoint_threshold = _build_loader_config(detector_cfg)
     pose_model, pose_processor, pose_device = load_pose_from_hub(loader_cfg)
 
     detection_index = _index_player_detections(player_detections)
@@ -166,7 +165,6 @@ def _index_player_detections(
 
 
 def _build_loader_config(
-    weights_path: Path,
     detector_cfg: DictConfig | dict | None,
 ) -> tuple[PoseLoadConfig, float]:
     kwargs: dict[str, Any] = {}
@@ -182,7 +180,6 @@ def _build_loader_config(
         config_values = cast(dict[str, Any], config_values_obj)
 
         keypoint_threshold = float(config_values.pop("keypoint_threshold", keypoint_threshold))
-        config_values.pop("weights", None)
 
         allowed_fields = {
             "model_id",
@@ -198,9 +195,6 @@ def _build_loader_config(
                     kwargs[field] = bool(value)
                 else:
                     kwargs[field] = value
-
-    if weights_path and weights_path.is_dir() and "cache_dir" not in kwargs:
-        kwargs["cache_dir"] = str(weights_path)
 
     pose_cfg = PoseLoadConfig(**kwargs)
     return pose_cfg, float(keypoint_threshold)

@@ -73,12 +73,10 @@ def run(cfg: DictConfig) -> None:
 
     if "pose" in cfg.detection:
         pose_cfg = cfg.detection.pose
-        pose_weights = Path(pose_cfg.get("weights", "") or ".")
         pose_results = _run_detector(
             "pose",
             infer_pose.run_pose_inference,
             videos,
-            pose_weights,
             pose_cfg,
             player_results,
         )
