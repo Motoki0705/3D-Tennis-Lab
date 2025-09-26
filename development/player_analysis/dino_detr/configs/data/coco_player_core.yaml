@@ -1,0 +1,56 @@
+﻿# COCO player dataset via core build factory
+
+# Optional: ensure the dataset class is registered into the core registry.
+# This is needed only if you call build_dataset(name=...) by registry name.
+# When referenced by another config with `_target_: development.player_analysis.dino_detr.datasets.registry.register`,
+# it will register the dataset at runtime.
+dataset_name: dino_detr_coco
+dataset_register:
+  target: development.player_analysis.dino_detr.datasets.dataset:CocoDetectionDataset
+  name: dino_detr_coco
+
+collate_fn_name: collate_seq_t1
+collate_fn_register:
+  target: development.player_analysis.dino_detr.collate.batch:collate_seq_t1
+  name: collate_seq_t1
+
+# Dataset instance constructed through development.core.data_core.build.build_dataset
+# You can import and instantiate this mapping wherever you need the Dataset object.
+dataset:
+  annotation_file: data/processed/ball/annotation.json
+  image_dir: data/processed/ball/images
+  sequence_length: 1
+  frame_stride: 1
+  target_category: player
+  min_box_size: 1.0
+  image_size: [320, 640]
+  drop_short_clips: false
+  allow_partial_last: false
+  normalize_mean: [0.485, 0.456, 0.406]
+  normalize_std: [0.229, 0.224, 0.225]
+  class_id_remap:
+    2: 0
+
+augment:
+  bundle: standard
+  image_size: [320, 640]
+  targets: [image, bboxes]
+  use_replay: true
+  bbox_format: coco
+  bbox_label_fields: [classes]
+  bbox_field: bboxes
+  class_field: classes
+
+
+# Optional dataloader/split settings compatible with BaseDataModule
+splits:
+  train_ratio: 0.8
+  val_ratio: 0.1
+  test_ratio: 0.1
+
+dataloader:
+  batch_size: 8
+  num_workers: 0
+  pin_memory: true
+  persistent_workers: false
+  shuffle_train: true

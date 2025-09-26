@@ -1,0 +1,40 @@
+# DINO-DETR model hyper-parameters.
+
+# Transformer / DETR core
+hidden_dim: 256
+dropout: 0.1
+nheads: 8
+dim_feedforward: 2048
+enc_layers: 6
+dec_layers: 6
+pre_norm: false
+
+# Matcher costs
+set_cost_class: 1.0
+set_cost_bbox: 5.0
+set_cost_giou: 2.0
+
+# Loss weights
+bbox_loss_coef: 5.0
+giou_loss_coef: 2.0
+mask_loss_coef: 1.0
+dice_loss_coef: 1.0
+
+# Model behaviour
+num_queries: 100
+aux_loss: true
+masks: false
+frozen_weights: null
+lr_backbone: 0.0
+
+# Dataset metadata
+num_classes: 1
+dataset_file: coco
+
+# Criterion configuration
+eos_coef: 0.1
+
+dino_repo_dir: third_party/dinov3
+dino_model_name: dinov3_vitl16
+position_embedding: sine
+device: cuda
