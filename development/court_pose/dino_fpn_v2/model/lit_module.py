@@ -25,6 +25,37 @@ class CourtPoseLitModule(BaseLitModule):
         self.include_inputs = include_inputs
 
     # ------------------------------------------------------------------
+    # Training hook with target resolution for dict batches
+    # ------------------------------------------------------------------
+    def training_step(self, batch, batch_idx: int):
+        images, targets = self._split_batch(batch)
+        target = self._resolve_target(targets)
+        preds = self(images)
+
+        loss = self.loss_fn(preds, target)
+        self.log(
+            "train/loss",
+            loss,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            batch_size=self._infer_batch_size(images),
+        )
+
+        for name, fn in self.metric_fns.items():
+            metric_val = fn(preds, target)
+            self.log(
+                f"train/{name}",
+                metric_val,
+                prog_bar=False,
+                on_step=False,
+                on_epoch=True,
+                batch_size=self._infer_batch_size(images),
+            )
+
+        return loss
+
+    # ------------------------------------------------------------------
     # Evaluation hooks with logging payloads for callbacks
     # ------------------------------------------------------------------
     def validation_step(self, batch, batch_idx: int):

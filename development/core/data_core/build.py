@@ -73,7 +73,7 @@ def _ensure_dataset_registered(name: str, *, register: Mapping[str, Any] | None 
 
 
 def _ensure_collate_fn_registered(name: str, *, register: Mapping[str, Any] | None = None) -> None:
-    key = name.lower()
+    key = name.lower() if name is not None else ""
     if key in COLLATE_FN_REGISTRY:
         return
     if not register:
@@ -149,13 +149,16 @@ def build_datamodule(
     data_cfg = _to_dict(cfg_like)
     dataset_name = str(data_cfg.get("dataset_name", "")).lower()
     dataset_register = data_cfg.get("dataset_register", None)
-    collate_fn_name = data_cfg.get("collate_fn_name", None).lower()
+    collate_fn_name = data_cfg.get("collate_fn_name")
+    collate_fn_name = str(collate_fn_name).lower() if collate_fn_name is not None else None
     collate_fn_register = data_cfg.get("collate_fn_register", None)
     dataset = data_cfg.get("dataset", {})
     augment = data_cfg.get("augment", {})
 
-    _ensure_dataset_registered(dataset_name, register=dataset_register)
-    _ensure_collate_fn_registered(collate_fn_name, register=collate_fn_register)
+    if dataset_name is not None:
+        _ensure_dataset_registered(dataset_name, register=dataset_register)
+    if collate_fn_name is not None:
+        _ensure_collate_fn_registered(collate_fn_name, register=collate_fn_register)
     aug = _build_augment_bundle(augment or {})
 
     # Build per-split datasets so transforms don't collide.

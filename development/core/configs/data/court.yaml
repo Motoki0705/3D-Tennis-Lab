@@ -15,14 +15,8 @@ paths:
 dataset:
   image_size: [224, 224]
   heatmap_size: [224, 224]
-  output_stride: 4
   heatmap_sigma: 3.0
-  keypoints:
-    count: null
-    use_offset: false
-  normalization:
-    mean: [0.485, 0.456, 0.406]
-    std: [0.229, 0.224, 0.225]
+
 
 # DataLoader defaults.
 dataloader:
