@@ -1,0 +1,26 @@
+paths:
+  train:
+    images: "data/processed/player/images"
+    annotation: "data/processed/player/annotation.json"
+
+dataset:
+  annotation_file: ${paths.train.annotation}
+  image_dir: ${paths.train.images}
+  sequence_length: 1
+  frame_stride: 1
+  image_size: [320, 640]
+  target_categories: ["person"]
+  min_keypoints: 1
+  min_box_area: 1.0
+
+splits:
+  train_ratio: 0.8
+  val_ratio: 0.1
+  test_ratio: 0.1
+  seed: 42
+
+dataloader:
+  batch_size: 8
+  num_workers: 4
+  pin_memory: true
+  persistent_workers: false
