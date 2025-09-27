@@ -1,0 +1,50 @@
+repo_dir: "third_party/dinov3"
+entry: "dinov3_vits16"
+weights: "third_party/dinov3/weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
+backbone_freeze: true
+backbone_out_channels: 256
+
+hidden_dim: 256
+nheads: 8
+dim_feedforward: 1024
+encoder_layers: 1
+encoder_dropout: 0.0
+encoder_act: "gelu"
+use_encoder_idx: [2]
+expansion: 1.0
+depth_mult: 1.0
+eval_spatial_size: [320, 640]
+feat_strides: [8, 16, 32]
+
+num_queries: 60
+dec_layers: 6
+dropout: 0.0
+activation: "relu"
+learnable_tgt_init: true
+two_stage_type: "standard"
+aux_loss: true
+dec_pred_class_embed_share: false
+dec_pred_pose_embed_share: false
+two_stage_class_embed_share: false
+two_stage_bbox_embed_share: false
+cls_no_bias: false
+dec_n_points: 4
+enc_n_points: 4
+reg_max: 32
+reg_scale: 4.0
+
+num_classes: 1
+num_body_points: 17
+
+set_cost_class: 2.0
+set_cost_keypoints: 10.0
+set_cost_oks: 4.0
+focal_alpha: 0.25
+mal_alpha: null
+focal_gamma: 2.0
+weight_dict:
+  loss_vfl: 2.0
+  loss_keypoints: 10.0
+  loss_oks: 4.0
+losses: [vfl, keypoints]
+postprocess_num_select: 60
