@@ -13,7 +13,7 @@ task: train
 device: cuda
 
 datamodule:
-  _target_: development.player_analysis.dino_detr_pose.datasets.build_datamodule
+  _target_: development.core.data_core.build.build_datamodule
   cfg_like: ${data}
 
 model:

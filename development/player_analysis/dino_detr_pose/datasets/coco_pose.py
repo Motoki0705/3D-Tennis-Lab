@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
 import torch
-import torch.nn.functional as F
 
 from development.core.datasets.base_sequence import BaseSequenceDataset
 from development.core.data_core import coco_io
@@ -39,15 +38,12 @@ class CocoPlayerPoseDataset(BaseSequenceDataset):
         sequence_length: int = 1,
         frame_stride: int = 1,
         image_size: Sequence[int] = (320, 640),  # (H, W)
-        normalize_mean: Sequence[float] = (0.485, 0.456, 0.406),
-        normalize_std: Sequence[float] = (0.229, 0.224, 0.225),
-        target_categories: Sequence[str | int] = ("person",),
+        target_categories: Sequence[str | int] = ("player",),
         min_keypoints: int = 1,
         min_box_area: float = 1.0,
+        transform: Optional[Any] = None,
     ) -> None:
         self.image_size = (int(image_size[0]), int(image_size[1]))
-        self.normalize_mean = torch.tensor(normalize_mean, dtype=torch.float32).view(1, -1, 1, 1)
-        self.normalize_std = torch.tensor(normalize_std, dtype=torch.float32).view(1, -1, 1, 1)
         self.min_keypoints = int(min_keypoints)
         self.min_box_area = float(min_box_area)
         self.num_keypoints = 17  # fixed for COCO MPPE
@@ -69,7 +65,7 @@ class CocoPlayerPoseDataset(BaseSequenceDataset):
             frame_stride=frame_stride,
             drop_short_clips=False,
             allow_partial_last=False,
-            transform=lambda sample: sample,
+            transform=transform,
         )
 
     # ------------------------------------------------------------------
@@ -142,8 +138,6 @@ class CocoPlayerPoseDataset(BaseSequenceDataset):
         inputs = sample["inputs"].float()  # [T,C,H,W]
         T, C, H, W = inputs.shape
         target_h, target_w = self.image_size
-        resized = F.interpolate(inputs, size=(target_h, target_w), mode="bilinear", align_corners=False)
-        normalised = (resized - self.normalize_mean.to(resized.device)) / self.normalize_std.to(resized.device)
 
         aggregated = sample.get("targets", {})
         boxes_seq = aggregated.get("bboxes", [])
@@ -245,7 +239,7 @@ class CocoPlayerPoseDataset(BaseSequenceDataset):
         }
 
         return {
-            "inputs": normalised.contiguous(),
+            "inputs": inputs,
             "targets": targets_final,
             "metadata": metadata,
         }

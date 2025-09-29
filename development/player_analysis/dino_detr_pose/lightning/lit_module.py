@@ -1,9 +1,7 @@
 """Lightning wrapper for DINOv3 + DETRPose."""
 
 from __future__ import annotations
-
 from typing import Any, Dict, Mapping, Optional
-
 import torch
 
 from development.core.lightning.base_lit_module import BaseLitModule
@@ -30,7 +28,7 @@ class DinoDetrPoseLitModule(BaseLitModule):
         pose_processor = self.postprocessors.get("pose")
         self.num_body_points = getattr(pose_processor, "num_body_points", 17)
 
-    # ------------------------------------------------------------------
+    # ---------------------------------------------------------------
     def forward(self, images: torch.Tensor, targets: Optional[list[Dict[str, torch.Tensor]]] = None):
         return self.model(images, targets)
 
@@ -41,14 +39,7 @@ class DinoDetrPoseLitModule(BaseLitModule):
         total = torch.zeros((), device=images.device, dtype=torch.float32)
         for name, value in loss_dict.items():
             if torch.is_tensor(value):
-                self.log(
-                    f"train/{name}",
-                    value,
-                    on_step=True,
-                    on_epoch=True,
-                    prog_bar=False,
-                    batch_size=len(images),
-                )
+                self.log(f"train/{name}", value, on_step=True, on_epoch=True, prog_bar=False, batch_size=len(images))
                 total = total + value
         self.log("train/loss", total, on_step=True, on_epoch=True, prog_bar=True, batch_size=len(images))
         return total
@@ -56,37 +47,60 @@ class DinoDetrPoseLitModule(BaseLitModule):
     def validation_step(self, batch, batch_idx: int):
         images, targets = batch
         outputs = self.model(images, targets)
-        loss_dict = self.loss_fn(outputs, targets)
+
+        # ---- PATCH: ensure aux_outputs exists on eval so Criterion won't assert
+        outputs_for_loss = self._ensure_aux_for_eval(outputs)
+
+        loss_dict = self.loss_fn(outputs_for_loss, targets)
         total = torch.zeros((), device=images.device, dtype=torch.float32)
         for name, value in loss_dict.items():
             if torch.is_tensor(value):
-                self.log(
-                    f"val/{name}",
-                    value,
-                    on_step=False,
-                    on_epoch=True,
-                    prog_bar=False,
-                    batch_size=len(images),
-                )
+                self.log(f"val/{name}", value, on_step=False, on_epoch=True, prog_bar=False, batch_size=len(images))
                 total = total + value
         self.log("val/loss", total, on_step=False, on_epoch=True, prog_bar=True, batch_size=len(images))
 
         for metric_name, metric_fn in self.metric_fns.items():
             metric_val = metric_fn(outputs, targets)
             if torch.is_tensor(metric_val):
-                self.log(
-                    f"val/{metric_name}",
-                    metric_val,
-                    on_step=False,
-                    on_epoch=True,
-                    batch_size=len(images),
-                )
+                self.log(f"val/{metric_name}", metric_val, on_step=False, on_epoch=True, batch_size=len(images))
 
         render_payload = self._build_render_payload(images, targets, outputs)
         render_payload["val_loss"] = total.detach()
         return render_payload
 
-    # ------------------------------------------------------------------
+    # ---------------------------------------------------------------
+    def _ensure_aux_for_eval(self, outputs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        On eval, Criterion expects 'aux_outputs', 'aux_pre_outputs', and 'aux_interm_outputs'.
+        Ensure they exist. To avoid matcher crashes, make aux_pre_outputs mirror the final preds
+        (not zero-length), while keeping aux_outputs/aux_interm_outputs empty lists.
+        """
+        if self.training or not isinstance(outputs, dict):
+            return outputs
+
+        # preserve insertion order so Criterion's device inference picks a Tensor first
+        patched = dict(outputs)
+
+        pl = patched.get("pred_logits")
+        pk = patched.get("pred_keypoints")
+        if pl is None or pk is None:
+            return outputs  # let it fail loudly; model didn't return required keys
+
+        # 1) always present, but empty on eval (no aux decoder layers)
+        patched.setdefault("aux_outputs", [])
+        patched.setdefault("aux_interm_outputs", [])
+
+        # 2) aux_pre_outputs must have a **valid Q** to satisfy the matcher
+        #    -> mirror the final head tensors (no detach needed)
+        if "aux_pre_outputs" not in patched:
+            patched["aux_pre_outputs"] = {
+                "pred_logits": pl,  # shape [B, Q, C]
+                "pred_keypoints": pk,  # shape [B, Q, 2*K]
+            }
+
+        return patched
+
+    # ---------------------------------------------------------------
     def _build_render_payload(self, images, targets, outputs):
         pose_processor = self.postprocessors.get("pose")
         if pose_processor is None:

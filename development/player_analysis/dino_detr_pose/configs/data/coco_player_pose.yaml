@@ -1,15 +1,20 @@
-paths:
-  train:
-    images: "data/processed/player/images"
-    annotation: "data/processed/player/annotation.json"
+dataset_name: coco_player_pose
+dataset_register:
+  target: development.player_analysis.dino_detr_pose.datasets.coco_pose:CocoPlayerPoseDataset
+  name: coco_player_pose
+
+collate_fn_name: collate_pose_seq_t1
+collate_fn_register:
+  target: development.player_analysis.dino_detr_pose.collate.pose:collate_pose_seq_t1
+  name: collate_pose_seq_t1
 
 dataset:
-  annotation_file: ${paths.train.annotation}
-  image_dir: ${paths.train.images}
+  annotation_file: data/processed/ball/annotation.json
+  image_dir: data/processed/ball/images
   sequence_length: 1
   frame_stride: 1
   image_size: [320, 640]
-  target_categories: ["person"]
+  target_categories: ["player"]
   min_keypoints: 1
   min_box_area: 1.0
 
@@ -20,7 +25,18 @@ splits:
   seed: 42
 
 dataloader:
-  batch_size: 8
-  num_workers: 4
+  batch_size: 16
+  num_workers: 0
   pin_memory: true
   persistent_workers: false
+
+augment:
+  bundle: standard
+  image_size: [320, 640]
+  targets: [image, bboxes]
+  use_replay: true
+  bbox_format: coco
+  bbox_label_fields: [classes]
+  keypoints_feild: keypoints
+  bbox_field: bboxes
+  class_field: classes

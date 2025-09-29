@@ -185,7 +185,6 @@ def create_model(cfg_like: Any) -> DETRPose:
         reg_max=cfg.reg_max,
         reg_scale=cfg.reg_scale,
     )
-
     model = DETRPose(backbone, encoder, transformer)
     return model
 
