@@ -13,7 +13,7 @@ from ..detection import infer_ball, infer_player
 
 _LOGGER = logging.getLogger(__name__)
 
-DetectorFn = Callable[[Iterable[Path], DictConfig], list]
+DetectorFn = Callable[[Iterable[Path], Path], list]
 
 
 def _run_detector(name: str, fn: DetectorFn, *args) -> list:
@@ -41,13 +41,20 @@ def run(cfg: DictConfig) -> None:
     ball_cfg = cfg.detection.ball
 
     combined_results: list = []
-    combined_results.extend(_run_detector("player", infer_player.run_player_inference, videos, player_cfg))
+    combined_results.extend(
+        _run_detector(
+            "player",
+            infer_player.run_player_inference,
+            videos,
+            Path(player_cfg.weights),
+        )
+    )
     combined_results.extend(
         _run_detector(
             "ball",
             infer_ball.run_ball_inference,
             videos,
-            ball_cfg,
+            Path(ball_cfg.weights),
         )
     )
 
@@ -60,7 +67,7 @@ def run(cfg: DictConfig) -> None:
                 "court",
                 infer_court.run_court_inference,
                 videos,
-                court_cfg,
+                Path(court_cfg.get("weights", "")),
             )
         )
 
