@@ -1,14 +1,16 @@
 # Player Analysis Inference
 
-This directory packages two complementary loaders:
+This directory packages three complementary loaders:
 
 1. `rt_detr/rtdetr_loader.py` – person detection using an RT-DETR Lightning
    checkpoint.
 2. `vit_pose/vit_pose_loader.py` – downstream pose estimation with a
    ViT-Pose model pulled from the Hugging Face Hub.
+3. `dino_detr_pose/dino_detr_pose_loader.py` – direct end-to-end player pose
+   estimation with the DINOv3 + DETRPose model fine-tuned in this repository.
 
 Together they reproduce the detection + pose pipeline used for player
-analytics.
+analytics, and now also expose the single-stage DINO-DETR pose baseline.
 
 ## Prerequisites
 
@@ -119,3 +121,26 @@ print("Pose results for first player:", pred_keypoints[0])
   RT-DETR outputs to the pose model's device avoids unnecessary copies.
 - For videos, wrap the snippets in a loop and batch frames where possible to
   keep GPU utilisation high.
+
+## Direct pose estimation with DINO-DETR Pose
+
+If you prefer to skip the two-stage pipeline, the
+`trained_models/player_analysis/dino_detr_pose` folder contains a loader and
+README that walk through rebuilding the DINOv3 + DETRPose network from a
+Lightning checkpoint. The helper returns the pure model, preprocessing, and the
+official post-processor so you can obtain keypoints in a handful of lines:
+
+```python
+from trained_models.player_analysis.dino_detr_pose.dino_detr_pose_loader import (
+    DinoDetrPoseLoadConfig,
+    load_dino_detr_pose,
+)
+
+cfg = DinoDetrPoseLoadConfig.from_yaml(
+    "trained_models/player_analysis/dino_detr_pose/config.yaml"
+)
+model, preprocess, postprocessor, device = load_dino_detr_pose(cfg)
+```
+
+Refer to the dedicated README for a detailed inference walkthrough, including
+rescaling utilities to map predictions back to the original image resolution.

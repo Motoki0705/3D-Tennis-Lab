@@ -13,7 +13,9 @@ This package orchestrates the end-to-end workflow that converts multi-camera 2D 
 
 1. **sync**: harmonize timestamps across cameras.
 2. **calibration**: solve for intrinsics/extrinsics and refine with bundle adjustment.
-3. **detection/track**: run batched 2D inference and multi-object tracking per camera.
+3. **detection/track**: run batched 2D inference and multi-object tracking per camera. Player
+   detections can run either the RT-DETR + ViT-Pose cascade or the single-stage
+   DINO-DETR pose model via a configuration flag (see below).
 4. **triangulation**: reconstruct 3D positions with temporal smoothing and court alignment.
 5. **export/viz**: persist results (Parquet/JSON) and provide visualization hooks.
 
@@ -31,9 +33,16 @@ Execute individual stages with the helper scripts (overrides are forwarded to Hy
 
 ```bash
 bash scripts/run_detect_2d.sh workspace.root=/data/matches
+bash scripts/run_detect_2d.sh detection.player.pose_mode=single_stage \
+    detection.player.single_stage.pose_config=/path/to/dino_detr_pose_config.yaml
 bash scripts/run_track_2d.sh detection.tracker.method=bytetrack
 bash scripts/run_triangulate_3d.sh triangulation.method=robust
 ```
+
+Player detection defaults to the two-stage RT-DETR + ViT-Pose pipeline. Switch to the
+single-stage DINO-DETR pose detector by setting `detection.player.pose_mode=single_stage`. Override
+`detection.player.single_stage.pose_config` (or the two-stage config paths) to point at your
+Lightning checkpoints.
 
 If Hydra is unavailable, the runner falls back to a minimal parser that accepts a `--config` path and `key=value` overrides, e.g.:
 

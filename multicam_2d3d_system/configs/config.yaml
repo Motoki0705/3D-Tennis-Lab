@@ -8,7 +8,7 @@ defaults:
   - calibration/intrinsics: pinhole
   - calibration/extrinsics: pnp
   - calibration/bundle: levenberg_marquardt
-  - detection/player: hrnet
+  - detection/player: pose_pipeline
   - detection/ball: yolox
   - detection/tracker: bytetrack
   - triangulation/method: robust

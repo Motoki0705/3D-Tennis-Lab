@@ -1,0 +1,20 @@
+# dino_detr_pose_config.yaml
+# Path to the Lightning checkpoint exported from the DinoDetrPose experiment
+checkpoint_path: "trained_models/player_analysis/dino_detr_pose/dino_detr_pose.ckpt"
+
+# Model config used to instantiate the pure DETRPose network
+model_config_path: "development/player_analysis/dino_detr_pose/configs/model_cfg/dino_detr_pose.yaml"
+
+# Runtime options
+device: "cuda" # "cuda" | "cpu" | "mps"
+strict: false # set true if you expect an exact key match
+remove_prefix: "model." # LightningModule prefix to strip before loading
+allow_partial: true # load intersecting keys and ignore the rest
+
+# Pre-processing settings (match training defaults)
+image_height: 320
+image_width: 640
+normalize_mean: [0.485, 0.456, 0.406]
+normalize_std: [0.229, 0.224, 0.225]
+
+torch_compile: false # optional PyTorch 2.x compile step for inference

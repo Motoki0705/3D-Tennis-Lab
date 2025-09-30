@@ -1,0 +1,20 @@
+pose_mode: two_stage # options: two_stage | single_stage
+
+# RT-DETR detector + ViT-Pose refinement
+# Override paths/thresholds per deployment via CLI, e.g.
+# `detection.player.pose_mode=two_stage detection.player.two_stage.detector_overrides.checkpoint_path=/new/path.ckpt`
+two_stage:
+  detector_config: trained_models/player_analysis/rt_detr/config.yaml
+  detector_overrides: {}
+  pose_config: trained_models/player_analysis/vit_pose/config.yaml
+  pose_overrides: {}
+  score_threshold: 0.5
+  max_players: 8
+
+# DINOv3 + DETRPose single-stage keypoint detector
+single_stage:
+  pose_config: trained_models/player_analysis/dino_detr_pose/config.yaml
+  pose_overrides: {}
+  score_threshold: 0.35
+  max_players: 8
+  min_visibility: 0.05
