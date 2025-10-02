@@ -21,10 +21,11 @@ Matrix3x3 = tuple[tuple[float, float, float], tuple[float, float, float], tuple[
 
 
 class Detection2DEntry(TypedDict, total=False):
-    cls: Literal["player", "ball", "court", "unknown"]
+    cls: Literal["player", "ball", "court", "pose", "unknown"]
     bbox: NotRequired[BBox]
     point: NotRequired[Point2D]
     score: float
+    keypoints: NotRequired[list[dict[str, float]]]
 
 
 class FrameDetections2D(TypedDict):

@@ -1,0 +1,11 @@
+# Data source configuration.
+root: data/samples/
+cameras:
+  - clip
+
+frames:
+  fps: 120
+  format: mp4
+annotations:
+  detections_dir: ${workspace.outputs}/detections_2d
+  tracks_dir: ${workspace.outputs}/tracks_2d

@@ -46,12 +46,13 @@ from dataclasses import asdict, dataclass
 
 import torch
 import yaml
-from rtdetr_util import (
+from transformers import AutoImageProcessor, RTDetrForObjectDetection
+
+from .rtdetr_utils import (
     align_and_load,
     load_lightning_state_dict,
     strip_prefix,
 )
-from transformers import AutoImageProcessor, RTDetrForObjectDetection
 
 
 @dataclass

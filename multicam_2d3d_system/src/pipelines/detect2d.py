@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from pathlib import Path
 
 from omegaconf import DictConfig
 
 from ..dataio import writers
-from ..detection import infer_ball, infer_player
+from ..detection import infer_ball, infer_court, infer_player, infer_pose
 
 _LOGGER = logging.getLogger(__name__)
 
-DetectorFn = Callable[[Iterable[Path], Path], list]
+DetectorFn = Callable[..., list]
 
 
 def _run_detector(name: str, fn: DetectorFn, *args) -> list:
@@ -41,35 +41,46 @@ def run(cfg: DictConfig) -> None:
     ball_cfg = cfg.detection.ball
 
     combined_results: list = []
-    combined_results.extend(
-        _run_detector(
-            "player",
-            infer_player.run_player_inference,
-            videos,
-            Path(player_cfg.weights),
-        )
+    player_results = _run_detector(
+        "player",
+        infer_player.run_player_inference,
+        videos,
+        Path(player_cfg.weights),
+        player_cfg,
     )
+    combined_results.extend(player_results)
     combined_results.extend(
         _run_detector(
             "ball",
             infer_ball.run_ball_inference,
             videos,
             Path(ball_cfg.weights),
+            ball_cfg,
         )
     )
 
     if "court" in cfg.detection:
-        from ..detection import infer_court  # Local import until implementation lands
-
         court_cfg = cfg.detection.court
         combined_results.extend(
             _run_detector(
                 "court",
                 infer_court.run_court_inference,
                 videos,
-                Path(court_cfg.get("weights", "")),
+                Path(court_cfg.weights),
+                court_cfg,
             )
         )
+
+    if "pose" in cfg.detection:
+        pose_cfg = cfg.detection.pose
+        pose_results = _run_detector(
+            "pose",
+            infer_pose.run_pose_inference,
+            videos,
+            pose_cfg,
+            player_results,
+        )
+        combined_results.extend(pose_results)
 
     if not combined_results:
         _LOGGER.warning("No detections generated; skipping serialization")

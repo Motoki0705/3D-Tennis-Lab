@@ -13,9 +13,10 @@ This package orchestrates the end-to-end workflow that converts multi-camera 2D 
 
 1. **sync**: harmonize timestamps across cameras.
 2. **calibration**: solve for intrinsics/extrinsics and refine with bundle adjustment.
-3. **detection/track**: run batched 2D inference and multi-object tracking per camera.
-4. **triangulation**: reconstruct 3D positions with temporal smoothing and court alignment.
-5. **export/viz**: persist results (Parquet/JSON) and provide visualization hooks.
+3. **detection**: run HRNet ball, RT-DETR player, ViT-Pose keypoints, and DINO-FPN court detectors.
+4. **tracking**: associate per-camera detections into lightweight tracks.
+5. **triangulation**: reconstruct smoothed 3D trajectories and align to the court frame.
+6. **export/viz**: persist results (Parquet/JSON) and provide visualization hooks.
 
 Refer to `configs/` for Hydra entry points and `scripts/` for runnable presets.
 
@@ -31,8 +32,8 @@ Execute individual stages with the helper scripts (overrides are forwarded to Hy
 
 ```bash
 bash scripts/run_detect_2d.sh workspace.root=/data/matches
-bash scripts/run_track_2d.sh detection.tracker.method=bytetrack
-bash scripts/run_triangulate_3d.sh triangulation.method=robust
+bash scripts/run_track_2d.sh detection.tracker.method=simple_centroid
+bash scripts/run_triangulate_3d.sh triangulation.smoothing.filter=kalman
 ```
 
 If Hydra is unavailable, the runner falls back to a minimal parser that accepts a `--config` path and `key=value` overrides, e.g.:

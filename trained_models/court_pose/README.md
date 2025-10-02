@@ -59,3 +59,24 @@ print("Court keypoints:", coords)
   Gaussian peak fitting.
 - If you need batched inference simply stack multiple transformed tensors into
   a single batch before calling `model`.
+
+## DINO FPN v2 variant
+
+The `dino_fpn_v2` folder packages the upgraded DINOv3 + FPN court pose model. Load it with
+`dino_fpn_v2/dino_fpn_v2_loader.py` and the matching dataclass `DinoFpnV2LoadConfig`:
+
+```python
+from trained_models.court_pose.dino_fpn_v2.dino_fpn_v2_loader import (
+    DinoFpnV2LoadConfig,
+    load_dino_fpn_v2_with_ckpt,
+)
+
+cfg = DinoFpnV2LoadConfig.from_yaml("trained_models/court_pose/dino_fpn_v2/config.yaml")
+cfg.checkpoint_path = "/path/to/dino_fpn_v2.ckpt"
+
+model, transform, device = load_dino_fpn_v2_with_ckpt(cfg)
+```
+
+This variant initialises a DINOv3 backbone through `torch.hub.load`, so ensure `third_party/dinov3/` is present (or
+override `cfg.repo_dir`). The transform pipeline mirrors the v1 loader; its output heatmaps align with the 1:1 image
+resolution after interpolation.

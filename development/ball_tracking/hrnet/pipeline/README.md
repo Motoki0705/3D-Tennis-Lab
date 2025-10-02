@@ -1,79 +1,118 @@
-# HRNet Ball Tracking Pipeline
+# HRNet Ball Tracking Annotation Pipeline
 
-This directory orchestrates the semi-automatic tennis-ball annotation workflow that powers the 3D Tennis Lab dataset. The CLI entry point for all actions is `python -m development.ball_tracking.hrnet.pipeline`.
+## Overview
 
-## Workflow
+This pipeline is designed to automate the process of detecting tennis balls in videos, extracting relevant clips, and preparing them for annotation. It uses an HRNet-based model for ball detection, processes videos to identify ball-related events, and provides tools to manage the annotation workflow.
 
-1. **Scan & index videos** (`scanner.py`, `state.py`)
+The main goals of this pipeline are:
 
-   - `pipeline run` walks `paths.videos_root` and registers every supported video (`.mp4`, `.mov`, `.mkv`, `.avi`) in the SQLite state database located at `paths.state_db`.
-   - Registered rows track `status` (`queued` -> `running` -> `done`/`failed`), `last_processed_frame`, and `total_frames` so interrupted jobs can resume.
+- To efficiently process large amounts of video data.
+- To extract meaningful clips where a ball is present.
+- To provide a simple command-line interface for managing the annotation lifecycle (e.g., accepting/rejecting clips).
+- To generate a final consolidated annotation file.
 
-2. **Frame-wise inference** (`inference.py`, `parquet_io.py`)
+## Features
 
-   - Each pending video is decoded with OpenCV. Frames are warped to the HRNet input size (`model.inp_width x model.inp_height`) and normalized before being stacked into tensors of shape `(1, frames_in * 3, inp_height, inp_width)` where `frames_in` defaults to 3.
-   - The WASB-SBDT detector + tracker pair (Hydra config under `development/ball_tracking/hrnet/configs`) produces per-frame ball center predictions. Tracker output is projected back to the source frame, yielding per-frame records: `frame_idx`, timestamp `t` (seconds), `has_ball`, `xc`, `yc` (pixel coordinates in the original frame), and `conf` (confidence).
-   - Records are periodically appended to `<paths.inference_dir>/<video_id>.parquet`. If inference fails, the status is set to `failed` leaving the existing parquet untouched.
+- **Hydra-based Configuration**: Flexible configuration management using Hydra.
+- **State Management**: Keeps track of processed videos and their progress using an SQLite database.
+- **Extensible Clip Extraction**: Supports different strategies for extracting clips from detection data (e.g., `contiguous`, `clustering`).
+- **Annotation Workflow**: Simple commands to `accept`, `reject`, and `finalize` annotations.
+- **Parquet-based I/O**: Efficiently stores and reads detection results using Apache Parquet.
 
-3. **Clip extraction** (`clip_extractor/`)
+## Directory Structure
 
-   - The parquet DataFrame is filtered to rows where `has_ball == True` and grouped into clips according to the configured strategy:
-     - `contiguous` (default) joins detections separated by gaps up to `max_gap_frames`; clips shorter than `min_clip_len` are discarded.
-     - `clustering` groups detections by spatio-temporal density (DBSCAN) using the selected feature columns.
-   - Each `Clip` contains ordered `ClipFrame` objects preserving `frame_idx`, `t`, `xc`, `yc`, and `conf` for downstream export.
-
-4. **Clip export packaging** (`annotation.py`)
-
-   - New clips are compared against existing metadata to avoid duplicates, then exported beneath `paths.images_dir/<game_id>/Clip*/` as JPEG frames plus a COCO-style JSON annotation in `paths.ann_clips_dir`.
-   - Clip JSON stores the original video metadata (`video_id`, `start_frame`, `end_frame`) and defaults `accepted` to `false` for later review.
-
-5. **Manual review & merge**
-   - Reviewers call `pipeline accept <game_id/ClipN>` or `pipeline reject ...` to toggle the `accepted` flag in-place.
-   - `pipeline finalize` gathers every accepted clip JSON and merges them into `paths.ann_final`, re-indexing image and annotation IDs to produce the training-ready dataset artifact.
+```
+pipeline/
+├── conf/                     # Hydra configuration files
+│   ├── config.yaml           # Main configuration file
+│   ├── dataloader/
+│   ├── detector/
+│   ├── model/
+│   ├── runner/
+│   ├── tracker/
+│   └── transform/
+├── clip_extractor/           # Logic for extracting clips from detection data
+├── __main__.py               # Main entry point for the pipeline
+├── cli.py                    # Command-line interface definition (using Hydra)
+├── pipeline.py               # Core pipeline logic (AnnotationPipeline class)
+├── annotation.py             # Annotation handling and exporting functions
+├── inference.py              # Inference engine for running the detection model
+├── parquet_io.py             # Helper for reading/writing Parquet files
+├── scanner.py                # Scans for new videos to process
+└── state.py                  # State management using an SQLite repository
+```
 
 ## Configuration
 
-Hydra loads `conf/config.yaml`. Override any value via CLI suffixes (e.g. `python -m ... run logging.level=DEBUG inference.save_every_n_frames=50`). The top-level sections are:
+The pipeline is configured through `conf/config.yaml`. Key configuration sections include:
 
-- `paths`: Input video root, export folders, parquet output, final annotation target, and state database location. Paths may reference each other using `${paths.*}` interpolation.
-- `inference`: High-level pipeline settings. Key fields:
-  - `model`/`method`: Informational tags recorded alongside hydra overrides.
-  - `batch_size`: Passed to the detector runner.
-  - `save_every_n_frames`: Flush frequency for parquet writes.
-  - `model_path`: Checkpoint path propagated to the detector config.
-- `clip_extractor`: Selects the extraction strategy and its parameters (see step 3). Switching to clustering requires scikit-learn at runtime.
-- `export`: Controls whether raw frames are written and the JPEG quality used for exported clips.
-- `merge`: Currently only `only_accept`, guarding against accidental inclusion of un-reviewed clips.
-- `logging`: Global logging level applied by `cli.py`.
+- **`paths`**: Defines all input and output paths for videos, data, annotations, and the state database.
+- **`inference`**: Configures the detection model, including batch size and model path.
+- **`clip_extractor`**: Defines the strategy and parameters for extracting clips from detection data.
+- **`export`**: Parameters for exporting clips and frames (e.g., image quality).
+- **`command`**: The command to be executed by the pipeline (e.g., `run`, `accept`).
 
-### Detector stack configuration
+Hydra is used for configuration, allowing for easy overrides from the command line.
 
-Hydra composes the detector runtime directly from the config groups declared in `defaults`:
+## Usage
 
-- `runner`: Execution device, visualization toggles, and evaluation thresholds.
-- `model`: WASB/HRNet architecture parameters (frames in/out, input/output resolution, scales).
-- `detector`: TrackNetV2-specific knobs, including interpolation to `inference.model_path` for checkpoints.
-- `transform`: Augmentation toggles for train/test pipelines (kept deterministic for inference).
-- `tracker`: Online tracker thresholds and displacement settings.
+The pipeline is controlled via the command line. The entry point is `__main__.py`.
 
-Customize any of these via CLI overrides (e.g. `python -m ... run runner.device=cpu detector.postprocessor.score_threshold=0.3`).
+### Running the Full Pipeline
 
-## Data shape flow
+To run the entire processing pipeline (scan for new videos, run inference, and extract clips):
 
-| Stage           | Representation                 | Structure                                                 | Notes                                                                                         |
-| --------------- | ------------------------------ | --------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Video decode    | `numpy.ndarray`                | `(frame_height, frame_width, 3)` uint8 (BGR)              | Raw frame from OpenCV.                                                                        |
-| Model input     | `torch.Tensor`                 | `(1, frames_in*3, inp_height, inp_width)` float32         | Concatenation of `frames_in` normalized frames.                                               |
-| Detector output | Python dict                    | Keys: `x`, `y`, `score`, `visi`                           | Tracker-projected ball center in source pixels.                                               |
-| Inference log   | `pandas.DataFrame` -> parquet  | Columns: `frame_idx`, `t`, `has_ball`, `xc`, `yc`, `conf` | One row per processed frame.                                                                  |
-| Clip object     | `Clip(frames=[ClipFrame ...])` | Ordered frames with the same columns as parquet           | Gaps > `max_gap_frames` or short clips removed.                                               |
-| Export JSON     | COCO-like dict                 | `images`, `annotations`, `metadata`, `accepted`           | `annotations[*].keypoints = [x, y, visibility]` with visibility `2` when the ball is present. |
+```bash
+python -m development.ball_tracking.hrnet.pipeline
+```
 
-## Command quick reference
+or
 
-- `python -m development.ball_tracking.hrnet.pipeline run` – process all pending videos end-to-end.
-- `python -m development.ball_tracking.hrnet.pipeline accept <game_id/ClipN>` – mark a clip for inclusion in the final merge.
-- `python -m development.ball_tracking.hrnet.pipeline reject <game_id/ClipN>` – exclude a clip.
-- `python -m development.ball_tracking.hrnet.pipeline finalize` – build the consolidated annotation file at `paths.ann_final`.
+```bash
+python -m development.ball_tracking.hrnet.pipeline command=run
+```
 
-State and export directories are safe to remove or relocate manually, but remember to update the corresponding `paths.*` entries (or override them via CLI) before running the pipeline again.
+This will:
+
+1. Scan the `paths.videos_root` directory for new videos.
+2. Run inference on new or partially processed videos.
+3. Extract clips based on the `clip_extractor` strategy.
+4. Export the clips (frames and metadata) to the `paths.ann_clips_dir`.
+
+### Managing Annotations
+
+You can manage the generated clips using the `accept`, `reject`, and `finalize` commands.
+
+**To accept a clip:**
+
+```bash
+python -m development.ball_tracking.hrnet.pipeline command=accept clip=<clip_reference>
+```
+
+- `<clip_reference>` is the identifier of the clip (e.g., `game_X/Clip_Y`).
+
+**To reject a clip:**
+
+```bash
+python -m development.ball_tracking.hrnet.pipeline command=reject clip=<clip_reference>
+```
+
+**To finalize annotations:**
+
+This command merges all "accepted" clips into a single annotation file.
+
+```bash
+python -m development.ball_tracking.hrnet.pipeline command=finalize
+```
+
+The final annotations will be saved to the path specified by `paths.ann_final`.
+
+## Pipeline Steps (`run` command)
+
+1.  **Scan for Videos**: The `scanner` module checks the `paths.videos_root` directory and compares it against the state database (`state.db`) to find new or unprocessed videos.
+2.  **Run Inference**: For each new video, the `InferenceEngine` runs the ball detection model. Detections are saved to a Parquet file in the `paths.inference_dir`. The pipeline can resume from the last processed frame if interrupted.
+3.  **Extract Clips**: The `ClipExtractor` processes the Parquet file to identify and extract clips where ball events occur. The extraction logic is defined by the `strategy` in the configuration (e.g., `contiguous`).
+4.  **Export Clips**: The extracted clips are then exported. This involves:
+    - Saving individual frames as images (if `export.write_frames` is true).
+    - Creating a JSON file for each clip with metadata (e.g., frame numbers, video ID).
+    - These are saved in subdirectories under `paths.ann_clips_dir`.

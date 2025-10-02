@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from pathlib import Path
 
 from omegaconf import DictConfig
 
-from ..dataio import readers, writers
-from ..geometry import court_frame, temporal_opt
+from ..dataio import formats, readers, writers
+from ..geometry import court_frame, temporal_opt, triangulation
+from ..viz import render3d
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,38 +27,100 @@ def _build_output_path(cfg: DictConfig) -> Path:
 
 def run(cfg: DictConfig) -> None:
     """Execute the multi-stage 2D→3D reconstruction flow."""
-    tracks_dir = Path(cfg.data.annotations.tracks_dir)
-    track_bundles = readers.load_tracks([tracks_dir])
-
-    if not track_bundles:
-        _LOGGER.warning("No tracks found in %s; skipping 3D reconstruction", tracks_dir)
+    detections_dir = Path(cfg.data.annotations.detections_dir)
+    detections = readers.load_detections([detections_dir])
+    if not detections:
+        _LOGGER.warning("No detections available at %s; cannot produce 3D reconstruction", detections_dir)
         empty_reconstruction: dict = {"objects": []}
         writers.write_reconstruction(empty_reconstruction, _build_output_path(cfg))
         return
 
-    _LOGGER.info("Loaded %d camera track bundles", len(track_bundles))
-
-    # Placeholder reconstruction container until triangulation is implemented.
-    reconstruction: dict = {"objects": []}
-
-    try:
-        smoothed_objects: list = temporal_opt.smooth_trajectories(
-            reconstruction.get("objects", []),
-            method=cfg.triangulation.smoothing.filter,
-        )
-        reconstruction["objects"] = smoothed_objects
-    except NotImplementedError:
-        _LOGGER.info("Temporal smoothing not implemented; continuing with raw objects")
-
     calibration_dir = Path(cfg.workspace.outputs) / "calibration"
     calibration_entries = readers.load_calibration(calibration_dir / "cameras.yaml")
-    if calibration_entries:
-        calibration_map = {entry["camera_id"]: entry for entry in calibration_entries if "camera_id" in entry}
+    calibration_map = {entry["camera_id"]: entry for entry in calibration_entries if "camera_id" in entry}
+    if len(calibration_map) < 2:
+        _LOGGER.warning("Need calibration for at least two cameras; found %d", len(calibration_map))
+
+    frame_buckets: dict[tuple[int, int], list[tuple[str, formats.Detection2DEntry]]] = defaultdict(list)
+    timestamps: dict[tuple[int, int], float] = {}
+
+    for record in detections:
+        camera_id = str(record["camera_id"])
+        frame_idx = int(record.get("frame_idx", 0))
+        timestamp = float(record.get("timestamp", frame_idx))
+        bucket_key = (frame_idx, round(timestamp * 1000))
+        for det in record.get("detections", []):
+            if det.get("cls") != "ball":
+                continue
+            if det.get("point") is None and det.get("bbox") is None:
+                continue
+            frame_buckets[bucket_key].append((camera_id, det))
+            timestamps[bucket_key] = timestamp
+
+    ball_frames: list[formats.Frame3DEntry] = []
+
+    for key, observations in sorted(frame_buckets.items(), key=lambda kv: kv[0]):
+        if len(observations) < 2:
+            continue
         try:
-            reconstruction = court_frame.to_court_frame(reconstruction, calibration_map)
-        except NotImplementedError:
-            _LOGGER.info("Court frame alignment not implemented; exporting raw coordinates")
+            point3d = triangulation.triangulate(observations, calibration_map)
+        except Exception as exc:  # pragma: no cover - guard against singular configurations
+            _LOGGER.debug("Triangulation failed for frame %s: %s", key, exc)
+            continue
+        timestamp = timestamps.get(key, float(key[0]))
+        ball_frames.append({
+            "timestamp": timestamp,
+            "X": point3d,
+            "src": {
+                "frame_idx": key[0],
+                "cameras": [camera_id for camera_id, _ in observations],
+            },
+        })
+
+    reconstruction: dict = {
+        "objects": [
+            {
+                "id": "ball",
+                "frames": ball_frames,
+            }
+        ]
+        if ball_frames
+        else [],
+    }
+
+    smoothing_cfg = cfg.triangulation.smoothing
+    window = getattr(smoothing_cfg, "window", None)
+    kalman_cfg = None
+    if hasattr(smoothing_cfg, "get"):
+        kalman_cfg = smoothing_cfg.get("kalman")
+    if window is None and kalman_cfg:
+        window = kalman_cfg.get("smoothing_window", 5)
+    if window is None:
+        window = 5
+
+    try:
+        reconstruction_objects = temporal_opt.smooth_trajectories(
+            reconstruction.get("objects", []),
+            method=smoothing_cfg.filter,
+            window=int(window),
+        )
+        reconstruction["objects"] = reconstruction_objects
+    except NotImplementedError:
+        _LOGGER.info("Temporal smoothing method not implemented; exporting raw trajectories")
+
+    if calibration_map:
+        reconstruction = court_frame.to_court_frame(reconstruction, calibration_map)
     else:
         _LOGGER.info("Skipping court frame alignment; no calibration entries available")
 
-    writers.write_reconstruction(reconstruction, _build_output_path(cfg))
+    output_path = _build_output_path(cfg)
+    writers.write_reconstruction(reconstruction, output_path)
+
+    viz_cfg = getattr(cfg.export, "visualization", None)
+    render_cfg = getattr(viz_cfg, "render3d", None)
+    if render_cfg and getattr(render_cfg, "enabled", False):
+        scene_path = Path(
+            getattr(render_cfg, "output_path", Path(cfg.workspace.outputs) / "viz" / "reconstruction.ply")
+        )
+        backend = getattr(render_cfg, "backend", "open3d")
+        render3d.render_scene(reconstruction, scene_path, backend=backend)

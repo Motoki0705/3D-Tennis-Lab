@@ -26,7 +26,7 @@ import torch
 
 def load_lightning_state_dict(ckpt_path: str) -> OrderedDict[str, torch.Tensor]:
     """Load the 'state_dict' from a PyTorch Lightning .ckpt file (CPU map)."""
-    ckpt = torch.load(ckpt_path, map_location="cpu")
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     if "state_dict" not in ckpt:
         # Fallback: if it's a raw state dict (non-Lightning)
         if isinstance(ckpt, dict) and all(isinstance(v, torch.Tensor) for v in ckpt.values()):

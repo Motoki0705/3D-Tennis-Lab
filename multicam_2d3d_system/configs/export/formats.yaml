@@ -5,5 +5,11 @@ tracks:
   format: json
   path: ${workspace.outputs}/tracks_2d
 visualization:
-  overlay_video: true
-  render3d_backend: open3d
+  overlay_video:
+    enabled: true
+    output_dir: ${workspace.outputs}/viz/overlays
+    codec: mp4v
+  render3d:
+    enabled: true
+    backend: open3d
+    output_path: ${workspace.outputs}/viz/reconstruction.ply

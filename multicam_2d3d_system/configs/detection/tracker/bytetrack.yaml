@@ -1,7 +1,7 @@
-method: bytetrack
-association:
-  max_distance: 0.2
-  min_iou: 0.1
-  motion_model: kalman
-output:
-  store_intermediate: true
+# Simple centroid tracker configuration (placeholder for ByteTrack).
+
+method: simple_centroid
+max_frame_gap: 5
+ball_distance_px: 50
+player_distance_px: 120
+min_track_length: 3
