@@ -1,0 +1,41 @@
+# @package _global_
+
+defaults:
+  - data: court_pose_dino_fpn_v2
+  - training: court_pose_dino_fpn_v2
+  - callbacks: court_pose_dino_fpn_v2
+  - _self_
+
+project: "court_pose"
+experiment: "dino_fpn_v2"
+
+datamodule:
+  _target_: development.core.data_core.build.build_datamodule
+  cfg_like: ${data}
+
+model:
+  _target_: development.court_pose.dino_fpn_v2.model.factory.create_model
+  backbone:
+    repo_dir: "third_party/dinov3"
+    entry: "dinov3_vitb16"
+    weights: "third_party/dinov3/checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
+    freeze: true
+    vit_layers: [11]
+    fpn_channels: 256
+  decoder:
+    num_keypoints: 15
+    base_channels: 256
+    inner_channels: [256, 128, 64]
+    upsample_mode: bilinear
+    final_activation: null
+
+loss:
+  _target_: torch.nn.MSELoss
+  reduction: mean
+
+metrics: {}
+
+lit_module:
+  _target_: development.court_pose.dino_fpn_v2.model.factory.create_lit_module
+  target_key: heatmaps
+  include_inputs: true
