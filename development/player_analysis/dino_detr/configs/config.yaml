@@ -3,7 +3,7 @@
 defaults:
   - model_cfg: dino_detr
   - data: coco_player_core
-  - callbacks: lightning_default
+  - callbacks: pred_gt_overlay_logger
   - _self_
 
 project: "player_analysis"
