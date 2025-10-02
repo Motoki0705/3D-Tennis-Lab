@@ -15,3 +15,5 @@ seed: 1234
 
 video_path: null
 output_path: null
+use_half: false
+csv_path: null

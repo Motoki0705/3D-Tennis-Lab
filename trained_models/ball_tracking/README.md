@@ -27,12 +27,10 @@ from trained_models.ball_tracking.hrnet.hrnet_loader import (
     load_hrnet_with_ckpt,
 )
 
-from dataloaders.dataset_loader import get_transform as build_affine_transform
-
 cfg = HRNetLoadConfig(
     checkpoint_path="/path/to/best_model.pth.tar",
 )
-detector, tracker, transform, device, resolved_cfg = load_hrnet_with_ckpt(cfg)
+detector, tracker, transform, build_affine_transform, device, resolved_cfg = load_hrnet_with_ckpt(cfg)
 
 tracker.refresh()
 

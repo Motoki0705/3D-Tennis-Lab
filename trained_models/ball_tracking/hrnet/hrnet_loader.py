@@ -42,6 +42,7 @@ if str(WASB_SRC) not in sys.path:
     sys.path.insert(0, str(WASB_SRC))
 
 from dataloaders import build_img_transforms  # type: ignore  # noqa: E402
+from dataloaders.dataset_loader import get_transform as build_affine_transform  # type: ignore  # noqa: E402
 from detectors import build_detector  # type: ignore  # noqa: E402
 from trackers import build_tracker  # type: ignore  # noqa: E402
 
@@ -118,6 +119,8 @@ def load_hrnet_with_ckpt(
         Callable preprocessing pipeline (``PIL.Image`` -> normalised
         ``torch.FloatTensor``) identical to the test-time transform used at
         training.
+    build_affine_transform:
+        build affine_mats
     device:
         CUDA device selected for inference.
     composed_cfg:
@@ -145,7 +148,7 @@ def load_hrnet_with_ckpt(
     detector = build_detector(cfg)
     tracker = build_tracker(cfg)
 
-    return detector, tracker, transform, device, cfg
+    return detector, tracker, transform, build_affine_transform, device, cfg
 
 
 def compose_hrnet_cfg(
