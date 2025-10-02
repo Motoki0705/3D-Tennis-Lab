@@ -136,6 +136,66 @@ class _ClipReplayAdapter:
         self.bboxes_field = bboxes_field
         self.classes_field = classes_field
 
+        fmt = None
+        if hasattr(pipeline, "bbox_params") and pipeline.bbox_params is not None:
+            fmt = getattr(pipeline.bbox_params, "format", None)
+        self._bbox_format = fmt or "coco"  # valid values typically: "coco" or "albumentations"
+
+    def _sanitize_bboxes_for_pipeline(
+        self,
+        bboxes: List[Tuple[float, float, float, float]],
+        labels: Optional[List[int]],
+        image_hw: Tuple[int, int],  # (H, W)
+        fmt: str,  # "coco" または "albumentations"
+        drop_tiny: bool = False,
+        tiny_eps: float = 1e-6,
+    ) -> Tuple[List[Tuple[float, float, float, float]], Optional[List[int]]]:
+        H, W = image_hw
+        out_b = []
+        out_l = [] if labels is not None else None
+
+        if fmt == "coco":
+            # ピクセル単位の xywh
+            for i, b in enumerate(bboxes):
+                x, y, w, h = map(float, b)
+                # 左上隅を画像内にクランプ
+                x = max(0.0, min(x, max(0.0, W - 1.0)))
+                y = max(0.0, min(y, max(0.0, H - 1.0)))
+                # サイズをクランプしてボックスが画像内に収まるようにする
+                w = max(0.0, min(w, max(0.0, W - x)))
+                h = max(0.0, min(h, max(0.0, H - y)))
+                if drop_tiny and (w < tiny_eps or h < tiny_eps):
+                    continue
+                out_b.append((x, y, w, h))
+                if out_l is not None:
+                    out_l.append(int(labels[i]))
+            return out_b, out_l
+
+        elif fmt == "albumentations":
+            # 正規化された [0,1] 内の xyxy
+            for i, b in enumerate(bboxes):
+                x1, y1, x2, y2 = map(float, b)
+                # [0,1] にクランプ
+                x1 = min(1.0, max(0.0, x1))
+                y1 = min(1.0, max(0.0, y1))
+                x2 = min(1.0, max(0.0, x2))
+                y2 = min(1.0, max(0.0, y2))
+                # 正しい順序を確保
+                if x2 < x1:
+                    x1, x2 = x2, x1
+                if y2 < y1:
+                    y1, y2 = y2, y1
+                if drop_tiny and ((x2 - x1) < tiny_eps or (y2 - y1) < tiny_eps):
+                    continue
+                out_b.append((x1, y1, x2, y2))
+                if out_l is not None:
+                    out_l.append(int(labels[i]))
+            return out_b, out_l
+
+        else:
+            # 保守的に: そのまま通過させる
+            return list(map(tuple, bboxes)), list(map(int, labels)) if labels is not None else None
+
     def _frame_kwargs(
         self,
         images_uint8: np.ndarray,
@@ -144,13 +204,25 @@ class _ClipReplayAdapter:
         bboxes_seq: Optional[List[List[Tuple[float, float, float, float]]]],
         classes_seq: Optional[List[List[int]]],
     ) -> Dict[str, Any]:
-        kwargs: Dict[str, Any] = {"image": images_uint8[idx]}
+        img = images_uint8[idx]  # (H,W,C) uint8
+        H, W = img.shape[0], img.shape[1]
+        kwargs: Dict[str, Any] = {"image": img}
+
         if keypoints_seq is not None:
-            kwargs["keypoints"] = keypoints_seq[idx]
+            kwargs[self.keypoints_field] = keypoints_seq[idx]
+
         if bboxes_seq is not None:
-            kwargs["bboxes"] = bboxes_seq[idx]
+            boxes_in = bboxes_seq[idx]
+            labels_in = classes_seq[idx] if classes_seq is not None else None
+            # <-- sanitize to match the pipeline’s expected format
+            boxes_out, labels_out = self._sanitize_bboxes_for_pipeline(
+                boxes_in, labels_in, (H, W), self._bbox_format, drop_tiny=False
+            )
+            kwargs[self.bboxes_field] = boxes_out
             if classes_seq is not None:
-                kwargs["class_labels"] = classes_seq[idx]
+                # Albumentations commonly expects this to match bbox_params.label_fields
+                kwargs[self.classes_field] = labels_out
+
         return kwargs
 
     def __call__(self, sample: Mapping[str, Any]) -> Dict[str, Any]:
@@ -163,16 +235,15 @@ class _ClipReplayAdapter:
         keypoints_seq = _convert_keypoints(_normalise_sequence(targets_in.get(self.keypoints_field)))
         bboxes_seq = _convert_bboxes(_normalise_sequence(targets_in.get(self.bboxes_field)))
         classes_seq = _convert_classes(_normalise_sequence(targets_in.get(self.classes_field)))
-
         # 最初のフレームを適用して（必要なら）replay を取得
         first_kwargs = self._frame_kwargs(images_uint8, 0, keypoints_seq, bboxes_seq, classes_seq)
         first_out = self.pipeline(**first_kwargs)
         replay = first_out.get("replay") if (A is not None and isinstance(self.pipeline, A.ReplayCompose)) else None
 
         images_out = [_image_to_tensor(first_out["image"])]
-        keypoints_out = [first_out.get("keypoints", [])] if keypoints_seq is not None else None
-        bboxes_out = [first_out.get("bboxes", [])] if bboxes_seq is not None else None
-        classes_out = [first_out.get("class_labels", [])] if classes_seq is not None else None
+        keypoints_out = [first_out.get(self.keypoints_field, [])] if keypoints_seq is not None else None
+        bboxes_out = [first_out.get(self.bboxes_field, [])] if bboxes_seq is not None else None
+        classes_out = [first_out.get(self.classes_field, [])] if classes_seq is not None else None
 
         for index in range(1, images_uint8.shape[0]):
             kwargs = self._frame_kwargs(images_uint8, index, keypoints_seq, bboxes_seq, classes_seq)
@@ -180,11 +251,11 @@ class _ClipReplayAdapter:
 
             images_out.append(_image_to_tensor(out["image"]))
             if keypoints_out is not None:
-                keypoints_out.append(out.get("keypoints", []))
+                keypoints_out.append(out.get(self.keypoints_field, []))
             if bboxes_out is not None:
-                bboxes_out.append(out.get("bboxes", []))
+                bboxes_out.append(out.get(self.bboxes_field, []))
             if classes_out is not None:
-                classes_out.append(out.get("class_labels", []))
+                classes_out.append(out.get(self.classes_field, []))
 
         images_tensor = torch.stack(images_out, dim=0).contiguous()
         targets_out = dict(targets_in)

@@ -41,6 +41,7 @@ def build_callbacks(spec: Any) -> List[Callback]:
         instances are returned as-is.
     """
 
+    print(spec)
     callbacks: List[Callback] = []
     for obj in _flatten(spec):
         if obj is None:

@@ -1,3 +1,11 @@
-[submodule "third_party/Humans4D"]
-	path = third_party/Humans4D
-	url = https://github.com/shubham-goel/4D-Humans.git
+[submodule "third_party/4D-Humans"]
+	path = third_party/4D-Humans
+	url = https://github.com/shubham-goel/4D-Humans
+
+[submodule "third_party/dinov3"]
+  path = third_party/dinov3
+  url = https://github.com/facebookresearch/dinov3
+
+[submodule "third_party/WASB-SBDT"]
+	path = third_party/WASB-SBDT
+	url = https://github.com/nttcom/WASB-SBDT
