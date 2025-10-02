@@ -1,0 +1,6 @@
+model: hrnet
+weights: /path/to/player_weights.ckpt
+batch_size: 4
+confidence_threshold: 0.4
+nms:
+  iou: 0.5

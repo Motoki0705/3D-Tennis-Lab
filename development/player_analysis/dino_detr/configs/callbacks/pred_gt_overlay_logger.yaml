@@ -1,0 +1,30 @@
+custom:
+  _target_: development.core.callbacks.plaggable_logger.HeatmapLoggerPluggable
+  max_samples: 2
+  render_fn:
+    _target_: development.player_analysis.dino_detr.callbacks.bbox_render.render_pred_gt_bboxes_overlay_dict
+    tag: PredGTOverlay
+    image_key: images
+    pred_bboxes_key: pred_bboxes
+    gt_bboxes_key: target_bboxes
+    pred_labels_key: class_labels # あれば
+    pred_scores_key: null # 例: スコアをログに出したいなら "pred_scores" などに
+    assume_xyxy: true
+    pred_color: red
+    gt_color: blue
+    linewidth: 2
+
+model_checkpoint:
+  _target_: pytorch_lightning.callbacks.ModelCheckpoint
+  dirpath: "${hydra:runtime.output_dir}/checkpoints"
+  filename: "epoch={epoch}-val_loss={val/loss:.3f}"
+  monitor: "val/loss"
+  mode: "min"
+  save_top_k: 3
+  save_last: true
+
+early_stopping:
+  _target_: pytorch_lightning.callbacks.EarlyStopping
+  monitor: "val/loss"
+  patience: 5
+  mode: "min"

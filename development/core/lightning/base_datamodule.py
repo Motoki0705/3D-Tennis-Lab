@@ -1,10 +1,10 @@
-# filename: development/court_pose/01_vit_heatmap/datamodule.py
 from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
+import copy
 
 import pytorch_lightning as pl
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, Subset
 
 try:  # Optional dependency when running under Hydra/OmegaConf.
     from omegaconf import DictConfig, OmegaConf
@@ -17,6 +17,16 @@ _SENTINEL = object()
 
 
 class BaseDataModule(pl.LightningDataModule):
+    """Generic DataModule that owns one canonical dataset and splits it.
+
+    - Accepts optional per-split transforms and applies them by cloning the
+      base dataset per split to avoid transform collisions across Subsets.
+    - Reads dataloader parameters from either `dataloader` or `dataset` section
+      in the provided config-like object.
+    - Reads split ratios and optional seed from `splits` (fallback to
+      `dataset.train_ratio`, etc.).
+    """
+
     def __init__(
         self,
         config,
@@ -24,10 +34,9 @@ class BaseDataModule(pl.LightningDataModule):
         train_transforms=None,
         val_transforms=None,
         test_transforms=None,
-    ):
+        collate_fn=None,
+    ) -> None:
         super().__init__()
-        # Some callers pass Hydra DictConfig (supported), others pass lightweight objects.
-        # Save hparams when supported; otherwise skip without failing.
         try:
             self.save_hyperparameters(config)
         except Exception:
@@ -36,28 +45,53 @@ class BaseDataModule(pl.LightningDataModule):
         self._dataset_cfg = self._get_section(config, "dataset")
         self._dataloader_cfg = self._get_section(config, "dataloader")
         self._splits_cfg = self._get_section(config, "splits")
+
         self.full_dataset = dataset
         self.train_transforms = train_transforms
         self.val_transforms = val_transforms
         self.test_transforms = test_transforms
+        self.collate_fn = collate_fn
 
-    def setup(self, stage=None):
-        n_data = len(self.full_dataset)
-        n_train, n_val, n_test = self._resolve_split_lengths(n_data)
+        self.train_dataset = None
+        self.val_dataset = None
+        self.test_dataset = None
 
-        self.train_dataset, self.val_dataset, self.test_dataset = random_split(
-            self.full_dataset, [n_train, n_val, n_test]
-        )
+    def setup(self, stage: Any = None) -> None:
+        total = len(self.full_dataset)
+        n_train, n_val, n_test = self._resolve_split_lengths(total)
 
-        # 各データセットに適切なTransformを適用
+        # Deterministic split indices (supports optional seed in splits config)
+        seed = self._get_value(self._splits_cfg, "seed", 42)
+        try:
+            seed = int(seed)
+        except Exception:
+            seed = 42
+        indices = list(range(total))
+        import random as _random
+
+        _random.Random(seed).shuffle(indices)
+        i_train = indices[:n_train]
+        i_val = indices[n_train : n_train + n_val]
+        i_test = indices[n_train + n_val : n_train + n_val + n_test]
+
+        # Clone base dataset per split to allow distinct transforms
+        base = self.full_dataset
+        train_base = copy.deepcopy(base)
+        val_base = copy.deepcopy(base)
+        test_base = copy.deepcopy(base)
+
         if self.train_transforms:
-            self._assign_transform(self.train_dataset.dataset, self.train_transforms)
+            self._assign_transform(train_base, self.train_transforms)
         if self.val_transforms:
-            self._assign_transform(self.val_dataset.dataset, self.val_transforms)
+            self._assign_transform(val_base, self.val_transforms)
         if self.test_transforms:
-            self._assign_transform(self.test_dataset.dataset, self.test_transforms)
+            self._assign_transform(test_base, self.test_transforms)
 
-    def train_dataloader(self):
+        self.train_dataset = Subset(train_base, i_train)
+        self.val_dataset = Subset(val_base, i_val)
+        self.test_dataset = Subset(test_base, i_test)
+
+    def train_dataloader(self) -> DataLoader:
         return DataLoader(
             self.train_dataset,
             batch_size=self._get_loader_value("batch_size", default=1),
@@ -65,24 +99,27 @@ class BaseDataModule(pl.LightningDataModule):
             num_workers=self._get_loader_value("num_workers", default=0),
             pin_memory=self._get_loader_value("pin_memory", default=False),
             persistent_workers=self._get_loader_value("persistent_workers", default=False),
+            collate_fn=self.collate_fn,
         )
 
-    def val_dataloader(self):
+    def val_dataloader(self) -> DataLoader:
         return DataLoader(
             self.val_dataset,
             batch_size=self._get_loader_value("batch_size", default=1),
             num_workers=self._get_loader_value("num_workers", default=0),
             pin_memory=self._get_loader_value("pin_memory", default=False),
             persistent_workers=self._get_loader_value("persistent_workers", default=False),
+            collate_fn=self.collate_fn,
         )
 
-    def test_dataloader(self):
+    def test_dataloader(self) -> DataLoader:
         return DataLoader(
             self.test_dataset,
             batch_size=self._get_loader_value("batch_size", default=1),
             num_workers=self._get_loader_value("num_workers", default=0),
             pin_memory=self._get_loader_value("pin_memory", default=False),
             persistent_workers=self._get_loader_value("persistent_workers", default=False),
+            collate_fn=self.collate_fn,
         )
 
     # ------------------------------------------------------------------
@@ -101,9 +138,9 @@ class BaseDataModule(pl.LightningDataModule):
 
     def _resolve_split_lengths(self, total: int) -> Sequence[int]:
         splits = self._splits_cfg
-        train_ratio = self._get_value(splits, "train_ratio", None)
-        val_ratio = self._get_value(splits, "val_ratio", None)
-        test_ratio = self._get_value(splits, "test_ratio", None)
+        train_ratio = self._get_value(splits, "train_ratio", None) or self._get_value(splits, "train", None)
+        val_ratio = self._get_value(splits, "val_ratio", None) or self._get_value(splits, "val", None)
+        test_ratio = self._get_value(splits, "test_ratio", None) or self._get_value(splits, "test", None)
 
         # Backwards compatibility with older configs storing ratios under dataset.*
         if train_ratio is None and val_ratio is None and test_ratio is None:
@@ -129,7 +166,6 @@ class BaseDataModule(pl.LightningDataModule):
         positive = [max(0.0, float(r)) for r in ratios]
         denom = sum(positive)
         if denom <= 0.0:
-            # Fallback: assign everything to train split.
             lengths = [0 for _ in ratios]
             lengths[0] = total
             return lengths
