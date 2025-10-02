@@ -9,3 +9,7 @@
 [submodule "third_party/WASB-SBDT"]
 	path = third_party/WASB-SBDT
 	url = https://github.com/nttcom/WASB-SBDT
+
+[submodule "third_party/DETRPose"]
+	path = third_party/DETRPose
+	url = https://github.com/SebastianJanampa/DETRPose

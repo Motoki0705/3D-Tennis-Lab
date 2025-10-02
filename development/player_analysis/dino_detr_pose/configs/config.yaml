@@ -1,0 +1,30 @@
+# @package _global_
+
+defaults:
+  - model_cfg: dino_detr_pose
+  - data: coco_player_pose
+  - training: dino_detr_pose
+  - callbacks: pose_logger
+  - _self_
+
+project: "player_analysis"
+experiment: "dino_detr_pose"
+task: train
+device: cuda
+
+datamodule:
+  _target_: development.core.data_core.build.build_datamodule
+  cfg_like: ${data}
+
+model:
+  _target_: development.player_analysis.dino_detr_pose.model.create_model
+  cfg_like: ${model_cfg}
+
+loss:
+  _target_: development.player_analysis.dino_detr_pose.model.create_loss
+  cfg_like: ${model_cfg}
+
+lit_module:
+  _target_: development.player_analysis.dino_detr_pose.model.create_lit_module
+
+metrics: {}

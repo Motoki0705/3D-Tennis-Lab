@@ -118,7 +118,7 @@ experiment: "dino_sequencial"
 
 # 実験側ファクトリを指す
 datamodule:
-  _target_: development.ball_tracking.dino_sequencial.dataset.datamodule.build_datamodule
+  _target_: development.core.data_core.build.build_datamodule
   cfg: ${data}
 
 model:
